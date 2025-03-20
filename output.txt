@@ -1,0 +1,1290 @@
+Using TPU device: xla:0
+Initial data size: 123879
+After technical indicators: 123879
+After prepare_data: 123866
+Training fold 1
+Sequence size: 20577
+Train sequences: (20577, 64, 26), Targets: (20577, 5)
+Using dataset - Train: 8000, Val: 2000
+Enhanced s_mLSTM Stock Prediction Model:
+EnhancedFunnyMachine(
+  (extended_mlstm): ParallelExtendedSMLSTM(
+    (input_projection): Linear(in_features=26, out_features=256, bias=True)
+    (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+    (mlstm_block): ParallelMLSTMBlock(
+      (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+      (up_proj): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+      )
+      (mlstm): ParallelSMLSTM(
+        (cells): ModuleList(
+          (0): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=512, out_features=256, bias=True)
+            (W_k): Linear(in_features=512, out_features=256, bias=True)
+            (W_v): Linear(in_features=512, out_features=256, bias=True)
+            (W_i): Linear(in_features=512, out_features=1, bias=True)
+            (W_f): Linear(in_features=512, out_features=1, bias=True)
+            (W_o): Linear(in_features=512, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=512, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+          (1): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=256, out_features=256, bias=True)
+            (W_k): Linear(in_features=256, out_features=256, bias=True)
+            (W_v): Linear(in_features=256, out_features=256, bias=True)
+            (W_i): Linear(in_features=256, out_features=1, bias=True)
+            (W_f): Linear(in_features=256, out_features=1, bias=True)
+            (W_o): Linear(in_features=256, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=256, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+        )
+        (dropout_layer): Dropout(p=0.3, inplace=False)
+        (trend_detector): Linear(in_features=256, out_features=3, bias=True)
+      )
+      (down_proj): Linear(in_features=256, out_features=256, bias=True)
+    )
+    (dropout): Dropout(p=0.3, inplace=False)
+    (output_projection): Linear(in_features=256, out_features=256, bias=True)
+    (regime_detector): Linear(in_features=256, out_features=4, bias=True)
+    (signal_generator): Linear(in_features=256, out_features=3, bias=True)
+    (price_head): Linear(in_features=256, out_features=5, bias=True)
+    (direction_head): Linear(in_features=256, out_features=5, bias=True)
+    (volatility_head): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (regime_adapter): Linear(in_features=4, out_features=5, bias=True)
+)
+Total parameters: 1,935,431
+Using 26 features: ['High', 'Low', 'Open', 'Volume', 'RSI', 'MACD', 'MACD_signal', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Returns', 'Log_Returns', 'Volatility', 'Volume_MA', 'Volume_STD', 'DayOfWeek', 'MonthOfYear', 'EMA_Short', 'EMA_Long', 'EMA_Cross', 'RSI_Direction', 'ATR_Norm', 'Vol_Change', 'Vol_Trend', 'HourOfDay']
+Using device: xla:0
+X_batch device: xla:0
+price device: xla:0
+direction device: xla:0
+volatility device: xla:0
+Model device: xla:0
+Criterion device: xla:0
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 74.30%
+  Step 1 dir accuracy: 98.60%
+  Step 2 dir accuracy: 1.40%
+  Step 3 dir accuracy: 98.60%
+  Step 4 dir accuracy: 98.60%
+Epoch 1: Train Loss: 0.7387, Val Loss: 1.8384, MAPE: 90.87%, RMSE: 1.2541, MAE: 1.2377, Directional Accuracy: 74.30%, LR: 0.000003
+Regime Distribution: [0.2538038  0.26396218 0.23569945 0.24653459]
+Signal Distribution: [0.34267786 0.31689832 0.34042385]
+Saving model...
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 54.33%
+  Step 1 dir accuracy: 59.25%
+  Step 2 dir accuracy: 2.60%
+  Step 3 dir accuracy: 61.95%
+  Step 4 dir accuracy: 93.50%
+Epoch 2: Train Loss: 0.4162, Val Loss: 0.1816, MAPE: 18.49%, RMSE: 0.3059, MAE: 0.2438, Directional Accuracy: 54.33%, LR: 0.000005
+Regime Distribution: [0.53939277 0.26475847 0.07631125 0.11953754]
+Signal Distribution: [0.09069185 0.16983859 0.7394696 ]
+Saving model...
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 43.84%
+  Step 1 dir accuracy: 38.30%
+  Step 2 dir accuracy: 38.65%
+  Step 3 dir accuracy: 54.00%
+  Step 4 dir accuracy: 44.40%
+Epoch 3: Train Loss: 0.0346, Val Loss: 0.2396, MAPE: 16.77%, RMSE: 0.2629, MAE: 0.2173, Directional Accuracy: 43.84%, LR: 0.000006
+Regime Distribution: [0.7058843  0.2066011  0.03205435 0.05546026]
+Signal Distribution: [0.02595772 0.07704218 0.89700013]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 53.60%
+  Step 1 dir accuracy: 54.35%
+  Step 2 dir accuracy: 93.10%
+  Step 3 dir accuracy: 6.10%
+  Step 4 dir accuracy: 60.85%
+Epoch 4: Train Loss: 0.0109, Val Loss: 0.2612, MAPE: 15.73%, RMSE: 0.2437, MAE: 0.2041, Directional Accuracy: 53.60%, LR: 0.000008
+Regime Distribution: [0.73693115 0.19385973 0.01940477 0.04980434]
+Signal Distribution: [0.01581066 0.0589256  0.92526364]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 44.60%
+  Step 1 dir accuracy: 69.75%
+  Step 2 dir accuracy: 38.45%
+  Step 3 dir accuracy: 27.10%
+  Step 4 dir accuracy: 43.10%
+Epoch 5: Train Loss: 0.0079, Val Loss: 0.2586, MAPE: 11.65%, RMSE: 0.1843, MAE: 0.1520, Directional Accuracy: 44.60%, LR: 0.000010
+Regime Distribution: [0.74109364 0.18882604 0.01477184 0.05530852]
+Signal Distribution: [0.01364107 0.05644932 0.92990965]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 41.35%
+  Step 1 dir accuracy: 21.95%
+  Step 2 dir accuracy: 91.60%
+  Step 3 dir accuracy: 18.25%
+  Step 4 dir accuracy: 33.60%
+Epoch 6: Train Loss: 0.0059, Val Loss: 0.2573, MAPE: 8.85%, RMSE: 0.1470, MAE: 0.1181, Directional Accuracy: 41.35%, LR: 0.000010
+Regime Distribution: [0.74239534 0.17987902 0.01289143 0.06483416]
+Signal Distribution: [0.01425341 0.06027146 0.9254751 ]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 43.14%
+  Step 1 dir accuracy: 23.60%
+  Step 2 dir accuracy: 76.85%
+  Step 3 dir accuracy: 10.80%
+  Step 4 dir accuracy: 61.30%
+Epoch 7: Train Loss: -0.0192, Val Loss: 0.2553, MAPE: 8.11%, RMSE: 0.1393, MAE: 0.1094, Directional Accuracy: 43.14%, LR: 0.000010
+Regime Distribution: [0.24780357 0.24957526 0.24090101 0.26172018]
+Signal Distribution: [0.3345888  0.33243167 0.33297953]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 51.99%
+  Step 1 dir accuracy: 86.25%
+  Step 2 dir accuracy: 70.20%
+  Step 3 dir accuracy: 44.20%
+  Step 4 dir accuracy: 7.30%
+Epoch 8: Train Loss: -0.0206, Val Loss: 0.2635, MAPE: 8.17%, RMSE: 0.1330, MAE: 0.1085, Directional Accuracy: 51.99%, LR: 0.000010
+Regime Distribution: [0.25058508 0.24319494 0.24801786 0.25820214]
+Signal Distribution: [0.33464837 0.33268878 0.33266285]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 46.35%
+  Step 1 dir accuracy: 45.35%
+  Step 2 dir accuracy: 81.95%
+  Step 3 dir accuracy: 10.30%
+  Step 4 dir accuracy: 47.80%
+Epoch 9: Train Loss: -0.0211, Val Loss: 0.2646, MAPE: 7.31%, RMSE: 0.1229, MAE: 0.0977, Directional Accuracy: 46.35%, LR: 0.000010
+Regime Distribution: [0.2525212  0.24217686 0.2492177  0.2560843 ]
+Signal Distribution: [0.33759075 0.33210015 0.33030912]
+Direction targets distribution: 1.12% UP
+Corrected directional accuracy: 48.08%
+  Step 1 dir accuracy: 43.80%
+  Step 2 dir accuracy: 36.70%
+  Step 3 dir accuracy: 38.50%
+  Step 4 dir accuracy: 73.30%
+Epoch 10: Train Loss: -0.0215, Val Loss: 0.2674, MAPE: 7.80%, RMSE: 0.1291, MAE: 0.1048, Directional Accuracy: 48.08%, LR: 0.000009
+Regime Distribution: [0.2502237  0.24421634 0.24633338 0.2592266 ]
+Signal Distribution: [0.3352048  0.33324763 0.3315476 ]
+Early stopping triggered at epoch 10
+Training fold 2
+Sequence size: 41221
+Train sequences: (41221, 64, 26), Targets: (41221, 5)
+Using dataset - Train: 8000, Val: 2000
+Enhanced s_mLSTM Stock Prediction Model:
+EnhancedFunnyMachine(
+  (extended_mlstm): ParallelExtendedSMLSTM(
+    (input_projection): Linear(in_features=26, out_features=256, bias=True)
+    (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+    (mlstm_block): ParallelMLSTMBlock(
+      (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+      (up_proj): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+      )
+      (mlstm): ParallelSMLSTM(
+        (cells): ModuleList(
+          (0): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=512, out_features=256, bias=True)
+            (W_k): Linear(in_features=512, out_features=256, bias=True)
+            (W_v): Linear(in_features=512, out_features=256, bias=True)
+            (W_i): Linear(in_features=512, out_features=1, bias=True)
+            (W_f): Linear(in_features=512, out_features=1, bias=True)
+            (W_o): Linear(in_features=512, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=512, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+          (1): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=256, out_features=256, bias=True)
+            (W_k): Linear(in_features=256, out_features=256, bias=True)
+            (W_v): Linear(in_features=256, out_features=256, bias=True)
+            (W_i): Linear(in_features=256, out_features=1, bias=True)
+            (W_f): Linear(in_features=256, out_features=1, bias=True)
+            (W_o): Linear(in_features=256, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=256, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+        )
+        (dropout_layer): Dropout(p=0.3, inplace=False)
+        (trend_detector): Linear(in_features=256, out_features=3, bias=True)
+      )
+      (down_proj): Linear(in_features=256, out_features=256, bias=True)
+    )
+    (dropout): Dropout(p=0.3, inplace=False)
+    (output_projection): Linear(in_features=256, out_features=256, bias=True)
+    (regime_detector): Linear(in_features=256, out_features=4, bias=True)
+    (signal_generator): Linear(in_features=256, out_features=3, bias=True)
+    (price_head): Linear(in_features=256, out_features=5, bias=True)
+    (direction_head): Linear(in_features=256, out_features=5, bias=True)
+    (volatility_head): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (regime_adapter): Linear(in_features=4, out_features=5, bias=True)
+)
+Total parameters: 1,935,431
+Using 26 features: ['High', 'Low', 'Open', 'Volume', 'RSI', 'MACD', 'MACD_signal', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Returns', 'Log_Returns', 'Volatility', 'Volume_MA', 'Volume_STD', 'DayOfWeek', 'MonthOfYear', 'EMA_Short', 'EMA_Long', 'EMA_Cross', 'RSI_Direction', 'ATR_Norm', 'Vol_Change', 'Vol_Trend', 'HourOfDay']
+Using device: xla:0
+X_batch device: xla:0
+price device: xla:0
+direction device: xla:0
+volatility device: xla:0
+Model device: xla:0
+Criterion device: xla:0
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 27.86%
+  Step 1 dir accuracy: 1.30%
+  Step 2 dir accuracy: 1.30%
+  Step 3 dir accuracy: 98.70%
+  Step 4 dir accuracy: 10.15%
+Epoch 1: Train Loss: 0.6812, Val Loss: 2.7137, MAPE: 90.53%, RMSE: 2.1940, MAE: 2.1854, Directional Accuracy: 27.86%, LR: 0.000003
+Regime Distribution: [0.23560622 0.24633795 0.26115388 0.25690198]
+Signal Distribution: [0.31832856 0.32460737 0.3570641 ]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 46.96%
+  Step 1 dir accuracy: 3.20%
+  Step 2 dir accuracy: 98.35%
+  Step 3 dir accuracy: 6.30%
+  Step 4 dir accuracy: 80.00%
+Epoch 2: Train Loss: 0.4067, Val Loss: 0.2679, MAPE: 21.60%, RMSE: 0.5596, MAE: 0.5227, Directional Accuracy: 46.96%, LR: 0.000005
+Regime Distribution: [0.1430093  0.10327203 0.4364314  0.3172873 ]
+Signal Distribution: [0.5823714  0.14574066 0.27188793]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 49.39%
+  Step 1 dir accuracy: 66.15%
+  Step 2 dir accuracy: 68.35%
+  Step 3 dir accuracy: 22.15%
+  Step 4 dir accuracy: 40.90%
+Epoch 3: Train Loss: 0.0736, Val Loss: 0.1456, MAPE: 9.23%, RMSE: 0.2756, MAE: 0.2200, Directional Accuracy: 49.39%, LR: 0.000006
+Regime Distribution: [0.14481238 0.07303316 0.49025097 0.29190344]
+Signal Distribution: [0.62320256 0.11715372 0.2596437 ]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 49.75%
+  Step 1 dir accuracy: 83.55%
+  Step 2 dir accuracy: 67.10%
+  Step 3 dir accuracy: 21.65%
+  Step 4 dir accuracy: 26.70%
+Epoch 4: Train Loss: 0.0696, Val Loss: 0.1309, MAPE: 6.47%, RMSE: 0.1886, MAE: 0.1521, Directional Accuracy: 49.75%, LR: 0.000008
+Regime Distribution: [0.1386653  0.05319935 0.52361304 0.2845223 ]
+Signal Distribution: [0.6573201  0.09762642 0.2450535 ]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 46.20%
+  Step 1 dir accuracy: 34.25%
+  Step 2 dir accuracy: 72.40%
+  Step 3 dir accuracy: 49.45%
+  Step 4 dir accuracy: 28.70%
+Epoch 5: Train Loss: 0.0758, Val Loss: 0.1186, MAPE: 5.46%, RMSE: 0.1571, MAE: 0.1291, Directional Accuracy: 46.20%, LR: 0.000010
+Regime Distribution: [0.13694963 0.0532415  0.5437182  0.26609066]
+Signal Distribution: [0.66795725 0.09917284 0.23286985]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 53.78%
+  Step 1 dir accuracy: 68.65%
+  Step 2 dir accuracy: 64.50%
+  Step 3 dir accuracy: 24.25%
+  Step 4 dir accuracy: 57.70%
+Epoch 6: Train Loss: 0.0820, Val Loss: 0.1263, MAPE: 5.15%, RMSE: 0.1499, MAE: 0.1225, Directional Accuracy: 53.78%, LR: 0.000010
+Regime Distribution: [0.12473285 0.04057411 0.5594878  0.27520525]
+Signal Distribution: [0.69288445 0.09001048 0.21710509]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 45.57%
+  Step 1 dir accuracy: 88.40%
+  Step 2 dir accuracy: 5.50%
+  Step 3 dir accuracy: 33.55%
+  Step 4 dir accuracy: 54.85%
+Epoch 7: Train Loss: 0.0653, Val Loss: 0.1210, MAPE: 4.98%, RMSE: 0.1464, MAE: 0.1185, Directional Accuracy: 45.57%, LR: 0.000010
+Regime Distribution: [0.24353778 0.25103688 0.25300267 0.25242263]
+Signal Distribution: [0.34721452 0.3036778  0.3491077 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 53.41%
+  Step 1 dir accuracy: 88.90%
+  Step 2 dir accuracy: 7.95%
+  Step 3 dir accuracy: 51.30%
+  Step 4 dir accuracy: 65.50%
+Epoch 8: Train Loss: 0.0719, Val Loss: 0.1229, MAPE: 5.61%, RMSE: 0.1631, MAE: 0.1342, Directional Accuracy: 53.41%, LR: 0.000010
+Regime Distribution: [0.23707551 0.25540814 0.25660163 0.25091472]
+Signal Distribution: [0.34935743 0.31170264 0.3389399 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 49.29%
+  Step 1 dir accuracy: 63.75%
+  Step 2 dir accuracy: 35.55%
+  Step 3 dir accuracy: 65.80%
+  Step 4 dir accuracy: 32.05%
+Epoch 9: Train Loss: 0.0795, Val Loss: 0.1188, MAPE: 5.73%, RMSE: 0.1636, MAE: 0.1370, Directional Accuracy: 49.29%, LR: 0.000010
+Regime Distribution: [0.23823342 0.250876   0.2573177  0.25357288]
+Signal Distribution: [0.3415278  0.31481916 0.34365308]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 61.29%
+  Step 1 dir accuracy: 88.05%
+  Step 2 dir accuracy: 36.20%
+  Step 3 dir accuracy: 63.05%
+  Step 4 dir accuracy: 57.85%
+Epoch 10: Train Loss: 0.0863, Val Loss: 0.1287, MAPE: 6.63%, RMSE: 0.1911, MAE: 0.1595, Directional Accuracy: 61.29%, LR: 0.000009
+Regime Distribution: [0.23210381 0.2569983  0.25917947 0.25171843]
+Signal Distribution: [0.34758338 0.31677186 0.3356448 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 43.55%
+  Step 1 dir accuracy: 98.25%
+  Step 2 dir accuracy: 11.25%
+  Step 3 dir accuracy: 40.35%
+  Step 4 dir accuracy: 24.35%
+Epoch 11: Train Loss: 0.0941, Val Loss: 0.1126, MAPE: 5.01%, RMSE: 0.1473, MAE: 0.1196, Directional Accuracy: 43.55%, LR: 0.000009
+Regime Distribution: [0.23958671 0.24968739 0.25827008 0.2524558 ]
+Signal Distribution: [0.33570248 0.31767985 0.34661767]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 51.09%
+  Step 1 dir accuracy: 89.60%
+  Step 2 dir accuracy: 37.65%
+  Step 3 dir accuracy: 19.75%
+  Step 4 dir accuracy: 57.35%
+Epoch 12: Train Loss: 0.1014, Val Loss: 0.1302, MAPE: 6.94%, RMSE: 0.1966, MAE: 0.1670, Directional Accuracy: 51.09%, LR: 0.000009
+Regime Distribution: [0.23287165 0.25500786 0.26099584 0.25112462]
+Signal Distribution: [0.3420868  0.31609744 0.3418158 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 56.52%
+  Step 1 dir accuracy: 43.05%
+  Step 2 dir accuracy: 78.15%
+  Step 3 dir accuracy: 43.40%
+  Step 4 dir accuracy: 61.50%
+Epoch 13: Train Loss: 0.1103, Val Loss: 0.1086, MAPE: 5.13%, RMSE: 0.1521, MAE: 0.1227, Directional Accuracy: 56.52%, LR: 0.000009
+Regime Distribution: [0.23381501 0.25584835 0.25793964 0.252397  ]
+Signal Distribution: [0.339603   0.32176787 0.33862916]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 45.40%
+  Step 1 dir accuracy: 65.40%
+  Step 2 dir accuracy: 9.15%
+  Step 3 dir accuracy: 81.25%
+  Step 4 dir accuracy: 25.80%
+Epoch 14: Train Loss: 0.1178, Val Loss: 0.1252, MAPE: 5.19%, RMSE: 0.1646, MAE: 0.1245, Directional Accuracy: 45.40%, LR: 0.000008
+Regime Distribution: [0.23416056 0.25697157 0.25862747 0.2502404 ]
+Signal Distribution: [0.34608  0.319779 0.334141]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 48.50%
+  Step 1 dir accuracy: 63.75%
+  Step 2 dir accuracy: 26.90%
+  Step 3 dir accuracy: 82.65%
+  Step 4 dir accuracy: 20.70%
+Epoch 15: Train Loss: 0.1258, Val Loss: 0.1192, MAPE: 5.87%, RMSE: 0.1682, MAE: 0.1406, Directional Accuracy: 48.50%, LR: 0.000008
+Regime Distribution: [0.23684713 0.2545537  0.25701338 0.25158575]
+Signal Distribution: [0.3402334  0.31917322 0.3405934 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 47.51%
+  Step 1 dir accuracy: 64.95%
+  Step 2 dir accuracy: 40.40%
+  Step 3 dir accuracy: 24.25%
+  Step 4 dir accuracy: 60.45%
+Epoch 16: Train Loss: 0.1325, Val Loss: 0.1139, MAPE: 5.42%, RMSE: 0.1566, MAE: 0.1296, Directional Accuracy: 47.51%, LR: 0.000007
+Regime Distribution: [0.244293   0.24898158 0.25783283 0.24889258]
+Signal Distribution: [0.33913597 0.31921846 0.3416456 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 52.04%
+  Step 1 dir accuracy: 87.05%
+  Step 2 dir accuracy: 34.45%
+  Step 3 dir accuracy: 31.30%
+  Step 4 dir accuracy: 55.35%
+Epoch 17: Train Loss: 0.1309, Val Loss: 0.1079, MAPE: 4.81%, RMSE: 0.1403, MAE: 0.1156, Directional Accuracy: 52.04%, LR: 0.000007
+Regime Distribution: [0.24076451 0.25036275 0.26060098 0.24827178]
+Signal Distribution: [0.33894423 0.31974816 0.3413076 ]
+Saving model...
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 55.58%
+  Step 1 dir accuracy: 25.50%
+  Step 2 dir accuracy: 41.10%
+  Step 3 dir accuracy: 78.80%
+  Step 4 dir accuracy: 76.90%
+Epoch 18: Train Loss: 0.1299, Val Loss: 0.1225, MAPE: 7.21%, RMSE: 0.2095, MAE: 0.1741, Directional Accuracy: 55.58%, LR: 0.000006
+Regime Distribution: [0.23263063 0.2552061  0.2578174  0.25434586]
+Signal Distribution: [0.33941126 0.32143432 0.33915442]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 48.66%
+  Step 1 dir accuracy: 98.55%
+  Step 2 dir accuracy: 47.10%
+  Step 3 dir accuracy: 47.50%
+  Step 4 dir accuracy: 1.50%
+Epoch 19: Train Loss: 0.1275, Val Loss: 0.1237, MAPE: 6.99%, RMSE: 0.2035, MAE: 0.1688, Directional Accuracy: 48.66%, LR: 0.000006
+Regime Distribution: [0.23695078 0.25337717 0.25993595 0.2497361 ]
+Signal Distribution: [0.3415562  0.32023105 0.33821276]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 49.02%
+  Step 1 dir accuracy: 86.15%
+  Step 2 dir accuracy: 72.65%
+  Step 3 dir accuracy: 10.90%
+  Step 4 dir accuracy: 26.40%
+Epoch 20: Train Loss: 0.1269, Val Loss: 0.1140, MAPE: 4.90%, RMSE: 0.1446, MAE: 0.1175, Directional Accuracy: 49.02%, LR: 0.000006
+Regime Distribution: [0.2397755  0.25186828 0.25582173 0.25253445]
+Signal Distribution: [0.33784842 0.31994146 0.34221008]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 58.22%
+  Step 1 dir accuracy: 36.70%
+  Step 2 dir accuracy: 93.35%
+  Step 3 dir accuracy: 9.90%
+  Step 4 dir accuracy: 92.95%
+Epoch 21: Train Loss: 0.1269, Val Loss: 0.1113, MAPE: 5.46%, RMSE: 0.1702, MAE: 0.1309, Directional Accuracy: 58.22%, LR: 0.000005
+Regime Distribution: [0.23536485 0.25351176 0.2591062  0.2520172 ]
+Signal Distribution: [0.3384788  0.3207992  0.34072205]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 52.01%
+  Step 1 dir accuracy: 62.00%
+  Step 2 dir accuracy: 21.15%
+  Step 3 dir accuracy: 52.50%
+  Step 4 dir accuracy: 72.40%
+Epoch 22: Train Loss: 0.1252, Val Loss: 0.1102, MAPE: 5.78%, RMSE: 0.1746, MAE: 0.1386, Directional Accuracy: 52.01%, LR: 0.000005
+Regime Distribution: [0.23551224 0.25336206 0.25881824 0.25230747]
+Signal Distribution: [0.33785334 0.3233112  0.33883542]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 52.95%
+  Step 1 dir accuracy: 61.60%
+  Step 2 dir accuracy: 9.50%
+  Step 3 dir accuracy: 82.85%
+  Step 4 dir accuracy: 57.85%
+Epoch 23: Train Loss: 0.1271, Val Loss: 0.1121, MAPE: 5.40%, RMSE: 0.1812, MAE: 0.1296, Directional Accuracy: 52.95%, LR: 0.000004
+Regime Distribution: [0.23529014 0.253974   0.25897327 0.2517626 ]
+Signal Distribution: [0.33745924 0.32344037 0.3391004 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 54.71%
+  Step 1 dir accuracy: 92.05%
+  Step 2 dir accuracy: 21.70%
+  Step 3 dir accuracy: 22.90%
+  Step 4 dir accuracy: 82.20%
+Epoch 24: Train Loss: 0.1227, Val Loss: 0.1085, MAPE: 5.17%, RMSE: 0.1586, MAE: 0.1239, Directional Accuracy: 54.71%, LR: 0.000004
+Regime Distribution: [0.23689325 0.25320184 0.25644344 0.2534615 ]
+Signal Distribution: [0.33942443 0.32072926 0.3398463 ]
+Direction targets distribution: 1.04% UP
+Corrected directional accuracy: 60.70%
+  Step 1 dir accuracy: 85.95%
+  Step 2 dir accuracy: 37.70%
+  Step 3 dir accuracy: 53.15%
+  Step 4 dir accuracy: 66.00%
+Epoch 25: Train Loss: 0.1214, Val Loss: 0.1144, MAPE: 5.06%, RMSE: 0.1589, MAE: 0.1212, Directional Accuracy: 60.70%, LR: 0.000003
+Regime Distribution: [0.23788007 0.25337866 0.25497994 0.25376138]
+Signal Distribution: [0.33783647 0.32294166 0.33922186]
+Early stopping triggered at epoch 25
+Training fold 3
+Sequence size: 61865
+Train sequences: (61865, 64, 26), Targets: (61865, 5)
+Using dataset - Train: 8000, Val: 2000
+Enhanced s_mLSTM Stock Prediction Model:
+EnhancedFunnyMachine(
+  (extended_mlstm): ParallelExtendedSMLSTM(
+    (input_projection): Linear(in_features=26, out_features=256, bias=True)
+    (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+    (mlstm_block): ParallelMLSTMBlock(
+      (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+      (up_proj): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+      )
+      (mlstm): ParallelSMLSTM(
+        (cells): ModuleList(
+          (0): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=512, out_features=256, bias=True)
+            (W_k): Linear(in_features=512, out_features=256, bias=True)
+            (W_v): Linear(in_features=512, out_features=256, bias=True)
+            (W_i): Linear(in_features=512, out_features=1, bias=True)
+            (W_f): Linear(in_features=512, out_features=1, bias=True)
+            (W_o): Linear(in_features=512, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=512, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+          (1): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=256, out_features=256, bias=True)
+            (W_k): Linear(in_features=256, out_features=256, bias=True)
+            (W_v): Linear(in_features=256, out_features=256, bias=True)
+            (W_i): Linear(in_features=256, out_features=1, bias=True)
+            (W_f): Linear(in_features=256, out_features=1, bias=True)
+            (W_o): Linear(in_features=256, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=256, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+        )
+        (dropout_layer): Dropout(p=0.3, inplace=False)
+        (trend_detector): Linear(in_features=256, out_features=3, bias=True)
+      )
+      (down_proj): Linear(in_features=256, out_features=256, bias=True)
+    )
+    (dropout): Dropout(p=0.3, inplace=False)
+    (output_projection): Linear(in_features=256, out_features=256, bias=True)
+    (regime_detector): Linear(in_features=256, out_features=4, bias=True)
+    (signal_generator): Linear(in_features=256, out_features=3, bias=True)
+    (price_head): Linear(in_features=256, out_features=5, bias=True)
+    (direction_head): Linear(in_features=256, out_features=5, bias=True)
+    (volatility_head): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (regime_adapter): Linear(in_features=4, out_features=5, bias=True)
+)
+Total parameters: 1,935,431
+Using 26 features: ['High', 'Low', 'Open', 'Volume', 'RSI', 'MACD', 'MACD_signal', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Returns', 'Log_Returns', 'Volatility', 'Volume_MA', 'Volume_STD', 'DayOfWeek', 'MonthOfYear', 'EMA_Short', 'EMA_Long', 'EMA_Cross', 'RSI_Direction', 'ATR_Norm', 'Vol_Change', 'Vol_Trend', 'HourOfDay']
+Using device: xla:0
+X_batch device: xla:0
+price device: xla:0
+direction device: xla:0
+volatility device: xla:0
+Model device: xla:0
+Criterion device: xla:0
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 50.00%
+  Step 1 dir accuracy: 1.45%
+  Step 2 dir accuracy: 98.55%
+  Step 3 dir accuracy: 98.55%
+  Step 4 dir accuracy: 1.45%
+Epoch 1: Train Loss: 0.6070, Val Loss: 2.1791, MAPE: 92.23%, RMSE: 1.5922, MAE: 1.5901, Directional Accuracy: 50.00%, LR: 0.000003
+Regime Distribution: [0.25548297 0.24335524 0.22417794 0.27698383]
+Signal Distribution: [0.32908484 0.32486784 0.34604725]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 48.38%
+  Step 1 dir accuracy: 80.30%
+  Step 2 dir accuracy: 7.95%
+  Step 3 dir accuracy: 80.95%
+  Step 4 dir accuracy: 24.30%
+Epoch 2: Train Loss: 0.3586, Val Loss: 0.2382, MAPE: 25.04%, RMSE: 0.4398, MAE: 0.4315, Directional Accuracy: 48.38%, LR: 0.000005
+Regime Distribution: [0.06956308 0.17503832 0.0169342  0.7384644 ]
+Signal Distribution: [0.09495    0.19668844 0.70836157]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 51.61%
+  Step 1 dir accuracy: 87.20%
+  Step 2 dir accuracy: 31.20%
+  Step 3 dir accuracy: 9.50%
+  Step 4 dir accuracy: 78.55%
+Epoch 3: Train Loss: 0.0377, Val Loss: 0.1812, MAPE: 5.70%, RMSE: 0.1226, MAE: 0.0984, Directional Accuracy: 51.61%, LR: 0.000006
+Regime Distribution: [0.04807104 0.14199464 0.01021854 0.79971576]
+Signal Distribution: [0.06718672 0.15581222 0.7770011 ]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 47.16%
+  Step 1 dir accuracy: 94.80%
+  Step 2 dir accuracy: 37.00%
+  Step 3 dir accuracy: 27.30%
+  Step 4 dir accuracy: 29.55%
+Epoch 4: Train Loss: 0.0268, Val Loss: 0.1671, MAPE: 3.77%, RMSE: 0.0867, MAE: 0.0648, Directional Accuracy: 47.16%, LR: 0.000008
+Regime Distribution: [0.05374285 0.15404525 0.01246046 0.7797514 ]
+Signal Distribution: [0.07207186 0.16127646 0.7666517 ]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 47.42%
+  Step 1 dir accuracy: 91.75%
+  Step 2 dir accuracy: 12.90%
+  Step 3 dir accuracy: 78.80%
+  Step 4 dir accuracy: 6.25%
+Epoch 5: Train Loss: 0.0278, Val Loss: 0.1719, MAPE: 5.49%, RMSE: 0.1097, MAE: 0.0943, Directional Accuracy: 47.42%, LR: 0.000010
+Regime Distribution: [0.05056939 0.15188795 0.01161675 0.7859259 ]
+Signal Distribution: [0.06756882 0.1580134  0.7744178 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 54.33%
+  Step 1 dir accuracy: 88.00%
+  Step 2 dir accuracy: 10.40%
+  Step 3 dir accuracy: 85.65%
+  Step 4 dir accuracy: 33.25%
+Epoch 6: Train Loss: 0.0302, Val Loss: 0.1799, MAPE: 6.15%, RMSE: 0.1214, MAE: 0.1059, Directional Accuracy: 54.33%, LR: 0.000010
+Regime Distribution: [0.04464883 0.15298721 0.01103196 0.791332  ]
+Signal Distribution: [0.06096776 0.1457531  0.7932791 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 46.46%
+  Step 1 dir accuracy: 44.65%
+  Step 2 dir accuracy: 74.20%
+  Step 3 dir accuracy: 60.55%
+  Step 4 dir accuracy: 6.45%
+Epoch 7: Train Loss: 0.0080, Val Loss: 0.1442, MAPE: 3.88%, RMSE: 0.0868, MAE: 0.0666, Directional Accuracy: 46.46%, LR: 0.000010
+Regime Distribution: [0.26829967 0.24473545 0.22991432 0.2570505 ]
+Signal Distribution: [0.31559348 0.3477468  0.33665973]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 48.99%
+  Step 1 dir accuracy: 92.35%
+  Step 2 dir accuracy: 43.15%
+  Step 3 dir accuracy: 23.35%
+  Step 4 dir accuracy: 37.10%
+Epoch 8: Train Loss: 0.0101, Val Loss: 0.1691, MAPE: 3.72%, RMSE: 0.0783, MAE: 0.0639, Directional Accuracy: 48.99%, LR: 0.000010
+Regime Distribution: [0.26202714 0.25342026 0.23682307 0.24772952]
+Signal Distribution: [0.3209618  0.3402214  0.33881676]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 57.19%
+  Step 1 dir accuracy: 74.90%
+  Step 2 dir accuracy: 41.35%
+  Step 3 dir accuracy: 52.75%
+  Step 4 dir accuracy: 59.75%
+Epoch 9: Train Loss: 0.0128, Val Loss: 0.1555, MAPE: 3.75%, RMSE: 0.0829, MAE: 0.0643, Directional Accuracy: 57.19%, LR: 0.000010
+Regime Distribution: [0.2596386  0.25113145 0.23741995 0.25180998]
+Signal Distribution: [0.3208939  0.33469194 0.34441411]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 59.40%
+  Step 1 dir accuracy: 93.90%
+  Step 2 dir accuracy: 70.05%
+  Step 3 dir accuracy: 3.30%
+  Step 4 dir accuracy: 70.35%
+Epoch 10: Train Loss: 0.0154, Val Loss: 0.1829, MAPE: 6.97%, RMSE: 0.1361, MAE: 0.1202, Directional Accuracy: 59.40%, LR: 0.000009
+Regime Distribution: [0.25720143 0.24857657 0.24296135 0.2512606 ]
+Signal Distribution: [0.3195697  0.3379423  0.34248805]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 38.88%
+  Step 1 dir accuracy: 41.55%
+  Step 2 dir accuracy: 90.70%
+  Step 3 dir accuracy: 4.35%
+  Step 4 dir accuracy: 18.90%
+Epoch 11: Train Loss: 0.0186, Val Loss: 0.1753, MAPE: 6.90%, RMSE: 0.1366, MAE: 0.1189, Directional Accuracy: 38.88%, LR: 0.000009
+Regime Distribution: [0.2601478  0.24984325 0.24031478 0.24969421]
+Signal Distribution: [0.32198316 0.3360983  0.3419185 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 44.15%
+  Step 1 dir accuracy: 57.65%
+  Step 2 dir accuracy: 39.75%
+  Step 3 dir accuracy: 72.70%
+  Step 4 dir accuracy: 6.50%
+Epoch 12: Train Loss: 0.0205, Val Loss: 0.1575, MAPE: 4.17%, RMSE: 0.0868, MAE: 0.0717, Directional Accuracy: 44.15%, LR: 0.000009
+Regime Distribution: [0.26125312 0.24546313 0.24263307 0.25065067]
+Signal Distribution: [0.3263667  0.33555064 0.33808267]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 54.33%
+  Step 1 dir accuracy: 97.15%
+  Step 2 dir accuracy: 7.30%
+  Step 3 dir accuracy: 19.75%
+  Step 4 dir accuracy: 93.10%
+Epoch 13: Train Loss: 0.0240, Val Loss: 0.1593, MAPE: 4.51%, RMSE: 0.0917, MAE: 0.0776, Directional Accuracy: 54.33%, LR: 0.000009
+Regime Distribution: [0.2569878  0.24722736 0.24558574 0.25019908]
+Signal Distribution: [0.3252278  0.33425593 0.3405163 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 52.04%
+  Step 1 dir accuracy: 97.90%
+  Step 2 dir accuracy: 12.80%
+  Step 3 dir accuracy: 2.95%
+  Step 4 dir accuracy: 94.50%
+Epoch 14: Train Loss: 0.0266, Val Loss: 0.1720, MAPE: 6.22%, RMSE: 0.1222, MAE: 0.1073, Directional Accuracy: 52.04%, LR: 0.000008
+Regime Distribution: [0.256653   0.24604398 0.24587393 0.25142908]
+Signal Distribution: [0.32669845 0.3351354  0.33816615]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 56.44%
+  Step 1 dir accuracy: 74.70%
+  Step 2 dir accuracy: 53.85%
+  Step 3 dir accuracy: 7.00%
+  Step 4 dir accuracy: 90.20%
+Epoch 15: Train Loss: 0.0289, Val Loss: 0.1596, MAPE: 4.13%, RMSE: 0.0853, MAE: 0.0711, Directional Accuracy: 56.44%, LR: 0.000008
+Regime Distribution: [0.2591144  0.24519493 0.24478552 0.25090513]
+Signal Distribution: [0.32974148 0.33232832 0.3379302 ]
+Early stopping triggered at epoch 15
+Training fold 4
+Sequence size: 82509
+Train sequences: (82509, 64, 26), Targets: (82509, 5)
+Using dataset - Train: 8000, Val: 2000
+Enhanced s_mLSTM Stock Prediction Model:
+EnhancedFunnyMachine(
+  (extended_mlstm): ParallelExtendedSMLSTM(
+    (input_projection): Linear(in_features=26, out_features=256, bias=True)
+    (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+    (mlstm_block): ParallelMLSTMBlock(
+      (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+      (up_proj): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+      )
+      (mlstm): ParallelSMLSTM(
+        (cells): ModuleList(
+          (0): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=512, out_features=256, bias=True)
+            (W_k): Linear(in_features=512, out_features=256, bias=True)
+            (W_v): Linear(in_features=512, out_features=256, bias=True)
+            (W_i): Linear(in_features=512, out_features=1, bias=True)
+            (W_f): Linear(in_features=512, out_features=1, bias=True)
+            (W_o): Linear(in_features=512, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=512, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+          (1): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=256, out_features=256, bias=True)
+            (W_k): Linear(in_features=256, out_features=256, bias=True)
+            (W_v): Linear(in_features=256, out_features=256, bias=True)
+            (W_i): Linear(in_features=256, out_features=1, bias=True)
+            (W_f): Linear(in_features=256, out_features=1, bias=True)
+            (W_o): Linear(in_features=256, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=256, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+        )
+        (dropout_layer): Dropout(p=0.3, inplace=False)
+        (trend_detector): Linear(in_features=256, out_features=3, bias=True)
+      )
+      (down_proj): Linear(in_features=256, out_features=256, bias=True)
+    )
+    (dropout): Dropout(p=0.3, inplace=False)
+    (output_projection): Linear(in_features=256, out_features=256, bias=True)
+    (regime_detector): Linear(in_features=256, out_features=4, bias=True)
+    (signal_generator): Linear(in_features=256, out_features=3, bias=True)
+    (price_head): Linear(in_features=256, out_features=5, bias=True)
+    (direction_head): Linear(in_features=256, out_features=5, bias=True)
+    (volatility_head): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (regime_adapter): Linear(in_features=4, out_features=5, bias=True)
+)
+Total parameters: 1,935,431
+Using 26 features: ['High', 'Low', 'Open', 'Volume', 'RSI', 'MACD', 'MACD_signal', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Returns', 'Log_Returns', 'Volatility', 'Volume_MA', 'Volume_STD', 'DayOfWeek', 'MonthOfYear', 'EMA_Short', 'EMA_Long', 'EMA_Cross', 'RSI_Direction', 'ATR_Norm', 'Vol_Change', 'Vol_Trend', 'HourOfDay']
+Using device: xla:0
+X_batch device: xla:0
+price device: xla:0
+direction device: xla:0
+volatility device: xla:0
+Model device: xla:0
+Criterion device: xla:0
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 41.99%
+  Step 1 dir accuracy: 3.45%
+  Step 2 dir accuracy: 64.50%
+  Step 3 dir accuracy: 98.35%
+  Step 4 dir accuracy: 1.65%
+Epoch 1: Train Loss: 0.6884, Val Loss: 3.1456, MAPE: 94.14%, RMSE: 2.5351, MAE: 2.5341, Directional Accuracy: 41.99%, LR: 0.000003
+Regime Distribution: [0.24695247 0.27257654 0.24160959 0.23886137]
+Signal Distribution: [0.32112166 0.33048964 0.34838873]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 58.95%
+  Step 1 dir accuracy: 68.75%
+  Step 2 dir accuracy: 22.35%
+  Step 3 dir accuracy: 49.65%
+  Step 4 dir accuracy: 95.05%
+Epoch 2: Train Loss: 0.4610, Val Loss: 0.4525, MAPE: 27.98%, RMSE: 0.7979, MAE: 0.7547, Directional Accuracy: 58.95%, LR: 0.000005
+Regime Distribution: [0.13121654 0.23673286 0.3611246  0.27092603]
+Signal Distribution: [0.19271743 0.44385725 0.3634253 ]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 47.10%
+  Step 1 dir accuracy: 9.05%
+  Step 2 dir accuracy: 75.30%
+  Step 3 dir accuracy: 35.60%
+  Step 4 dir accuracy: 68.45%
+Epoch 3: Train Loss: 0.1136, Val Loss: 0.2492, MAPE: 13.12%, RMSE: 0.4331, MAE: 0.3550, Directional Accuracy: 47.10%, LR: 0.000006
+Regime Distribution: [0.08004688 0.20253764 0.4373962  0.28001922]
+Signal Distribution: [0.16049506 0.50517684 0.33432811]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 52.12%
+  Step 1 dir accuracy: 22.45%
+  Step 2 dir accuracy: 91.30%
+  Step 3 dir accuracy: 13.45%
+  Step 4 dir accuracy: 81.30%
+Epoch 4: Train Loss: 0.0811, Val Loss: 0.2066, MAPE: 10.87%, RMSE: 0.3536, MAE: 0.2938, Directional Accuracy: 52.12%, LR: 0.000008
+Regime Distribution: [0.0789981  0.20869195 0.42910168 0.28320828]
+Signal Distribution: [0.17514703 0.49572217 0.32913086]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 51.78%
+  Step 1 dir accuracy: 10.70%
+  Step 2 dir accuracy: 96.45%
+  Step 3 dir accuracy: 2.60%
+  Step 4 dir accuracy: 97.35%
+Epoch 5: Train Loss: 0.0829, Val Loss: 0.1721, MAPE: 5.82%, RMSE: 0.2196, MAE: 0.1572, Directional Accuracy: 51.78%, LR: 0.000010
+Regime Distribution: [0.07020263 0.2071139  0.43314993 0.28953353]
+Signal Distribution: [0.16890192 0.50992537 0.32117277]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 52.24%
+  Step 1 dir accuracy: 12.50%
+  Step 2 dir accuracy: 96.10%
+  Step 3 dir accuracy: 3.15%
+  Step 4 dir accuracy: 97.20%
+Epoch 6: Train Loss: 0.0880, Val Loss: 0.1683, MAPE: 6.31%, RMSE: 0.2243, MAE: 0.1700, Directional Accuracy: 52.24%, LR: 0.000010
+Regime Distribution: [0.06697792 0.2085181  0.4350743  0.2894297 ]
+Signal Distribution: [0.1716524  0.5031549  0.32519275]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 56.02%
+  Step 1 dir accuracy: 22.75%
+  Step 2 dir accuracy: 68.10%
+  Step 3 dir accuracy: 39.75%
+  Step 4 dir accuracy: 93.50%
+Epoch 7: Train Loss: 0.0699, Val Loss: 0.1770, MAPE: 6.85%, RMSE: 0.2262, MAE: 0.1846, Directional Accuracy: 56.02%, LR: 0.000010
+Regime Distribution: [0.24848515 0.25604105 0.24084613 0.25462767]
+Signal Distribution: [0.34547156 0.3222305  0.33229798]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 54.59%
+  Step 1 dir accuracy: 28.60%
+  Step 2 dir accuracy: 78.95%
+  Step 3 dir accuracy: 46.35%
+  Step 4 dir accuracy: 64.45%
+Epoch 8: Train Loss: 0.0766, Val Loss: 0.1589, MAPE: 4.35%, RMSE: 0.1750, MAE: 0.1168, Directional Accuracy: 54.59%, LR: 0.000010
+Regime Distribution: [0.24370405 0.24943309 0.24994789 0.256915  ]
+Signal Distribution: [0.34617987 0.3195244  0.33429575]
+Saving model...
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 58.32%
+  Step 1 dir accuracy: 58.00%
+  Step 2 dir accuracy: 25.90%
+  Step 3 dir accuracy: 81.85%
+  Step 4 dir accuracy: 67.55%
+Epoch 9: Train Loss: 0.0840, Val Loss: 0.1722, MAPE: 3.72%, RMSE: 0.1597, MAE: 0.0999, Directional Accuracy: 58.32%, LR: 0.000010
+Regime Distribution: [0.23932467 0.2439018  0.25386694 0.26290658]
+Signal Distribution: [0.34088826 0.3242347  0.334877  ]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 58.10%
+  Step 1 dir accuracy: 33.40%
+  Step 2 dir accuracy: 97.40%
+  Step 3 dir accuracy: 6.10%
+  Step 4 dir accuracy: 95.50%
+Epoch 10: Train Loss: 0.0904, Val Loss: 0.1655, MAPE: 4.73%, RMSE: 0.1646, MAE: 0.1270, Directional Accuracy: 58.10%, LR: 0.000009
+Regime Distribution: [0.24419732 0.24790062 0.25134143 0.2565606 ]
+Signal Distribution: [0.3454772  0.32167268 0.3328501 ]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 48.42%
+  Step 1 dir accuracy: 76.40%
+  Step 2 dir accuracy: 29.75%
+  Step 3 dir accuracy: 13.15%
+  Step 4 dir accuracy: 74.40%
+Epoch 11: Train Loss: 0.0993, Val Loss: 0.1935, MAPE: 7.04%, RMSE: 0.2240, MAE: 0.1889, Directional Accuracy: 48.42%, LR: 0.000009
+Regime Distribution: [0.24426794 0.24485858 0.2504702  0.26040325]
+Signal Distribution: [0.3441144  0.32349008 0.33239558]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 60.64%
+  Step 1 dir accuracy: 52.85%
+  Step 2 dir accuracy: 50.00%
+  Step 3 dir accuracy: 56.90%
+  Step 4 dir accuracy: 82.80%
+Epoch 12: Train Loss: 0.1058, Val Loss: 0.1745, MAPE: 3.71%, RMSE: 0.1484, MAE: 0.0997, Directional Accuracy: 60.64%, LR: 0.000009
+Regime Distribution: [0.24445508 0.24185328 0.25234383 0.26134777]
+Signal Distribution: [0.33946982 0.32686272 0.33366746]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 47.04%
+  Step 1 dir accuracy: 60.80%
+  Step 2 dir accuracy: 23.30%
+  Step 3 dir accuracy: 97.80%
+  Step 4 dir accuracy: 6.25%
+Epoch 13: Train Loss: 0.1135, Val Loss: 0.1855, MAPE: 4.17%, RMSE: 0.1642, MAE: 0.1119, Directional Accuracy: 47.04%, LR: 0.000009
+Regime Distribution: [0.24424008 0.24421462 0.25419912 0.25734615]
+Signal Distribution: [0.33787826 0.32988465 0.33223712]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 53.10%
+  Step 1 dir accuracy: 12.55%
+  Step 2 dir accuracy: 97.90%
+  Step 3 dir accuracy: 4.75%
+  Step 4 dir accuracy: 97.20%
+Epoch 14: Train Loss: 0.1234, Val Loss: 0.1799, MAPE: 6.16%, RMSE: 0.2107, MAE: 0.1655, Directional Accuracy: 53.10%, LR: 0.000008
+Regime Distribution: [0.25042325 0.24758135 0.24598597 0.25600943]
+Signal Distribution: [0.34353507 0.3261197  0.3303452 ]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 42.10%
+  Step 1 dir accuracy: 20.15%
+  Step 2 dir accuracy: 3.05%
+  Step 3 dir accuracy: 87.75%
+  Step 4 dir accuracy: 57.45%
+Epoch 15: Train Loss: 0.1301, Val Loss: 0.1957, MAPE: 8.87%, RMSE: 0.2669, MAE: 0.2384, Directional Accuracy: 42.10%, LR: 0.000008
+Regime Distribution: [0.25014478 0.24440065 0.24850978 0.2569448 ]
+Signal Distribution: [0.33929595 0.330564   0.33014005]
+Direction targets distribution: 1.32% UP
+Corrected directional accuracy: 51.28%
+  Step 1 dir accuracy: 13.15%
+  Step 2 dir accuracy: 82.35%
+  Step 3 dir accuracy: 19.10%
+  Step 4 dir accuracy: 90.50%
+Epoch 16: Train Loss: 0.1369, Val Loss: 0.2032, MAPE: 8.12%, RMSE: 0.2453, MAE: 0.2185, Directional Accuracy: 51.28%, LR: 0.000007
+Regime Distribution: [0.24918784 0.24459712 0.24935074 0.25686428]
+Signal Distribution: [0.33861274 0.32641494 0.33497232]
+Early stopping triggered at epoch 16
+Training fold 5
+Sequence size: 103153
+Train sequences: (103153, 64, 26), Targets: (103153, 5)
+Using dataset - Train: 8000, Val: 2000
+Enhanced s_mLSTM Stock Prediction Model:
+EnhancedFunnyMachine(
+  (extended_mlstm): ParallelExtendedSMLSTM(
+    (input_projection): Linear(in_features=26, out_features=256, bias=True)
+    (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+    (mlstm_block): ParallelMLSTMBlock(
+      (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+      (up_proj): Sequential(
+        (0): Linear(in_features=256, out_features=512, bias=True)
+        (1): GELU(approximate='none')
+      )
+      (mlstm): ParallelSMLSTM(
+        (cells): ModuleList(
+          (0): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=512, out_features=256, bias=True)
+            (W_k): Linear(in_features=512, out_features=256, bias=True)
+            (W_v): Linear(in_features=512, out_features=256, bias=True)
+            (W_i): Linear(in_features=512, out_features=1, bias=True)
+            (W_f): Linear(in_features=512, out_features=1, bias=True)
+            (W_o): Linear(in_features=512, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=512, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+          (1): ParallelSMLSTMCell(
+            (W_q): Linear(in_features=256, out_features=256, bias=True)
+            (W_k): Linear(in_features=256, out_features=256, bias=True)
+            (W_v): Linear(in_features=256, out_features=256, bias=True)
+            (W_i): Linear(in_features=256, out_features=1, bias=True)
+            (W_f): Linear(in_features=256, out_features=1, bias=True)
+            (W_o): Linear(in_features=256, out_features=256, bias=True)
+            (ssm): StructuredStateSpace(
+              (layer_norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            )
+            (regime_detector): Sequential(
+              (0): Linear(in_features=256, out_features=256, bias=True)
+              (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+              (2): GELU(approximate='none')
+              (3): Linear(in_features=256, out_features=4, bias=True)
+              (4): Softmax(dim=-1)
+            )
+            (layer_norm_input): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (layer_norm_memory): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+            (regime_processors): ModuleList(
+              (0-3): 4 x Sequential(
+                (0): Linear(in_features=256, out_features=256, bias=True)
+                (1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+                (2): GELU(approximate='none')
+              )
+            )
+          )
+        )
+        (dropout_layer): Dropout(p=0.3, inplace=False)
+        (trend_detector): Linear(in_features=256, out_features=3, bias=True)
+      )
+      (down_proj): Linear(in_features=256, out_features=256, bias=True)
+    )
+    (dropout): Dropout(p=0.3, inplace=False)
+    (output_projection): Linear(in_features=256, out_features=256, bias=True)
+    (regime_detector): Linear(in_features=256, out_features=4, bias=True)
+    (signal_generator): Linear(in_features=256, out_features=3, bias=True)
+    (price_head): Linear(in_features=256, out_features=5, bias=True)
+    (direction_head): Linear(in_features=256, out_features=5, bias=True)
+    (volatility_head): Linear(in_features=256, out_features=5, bias=True)
+  )
+  (regime_adapter): Linear(in_features=4, out_features=5, bias=True)
+)
+Total parameters: 1,935,431
+Using 26 features: ['High', 'Low', 'Open', 'Volume', 'RSI', 'MACD', 'MACD_signal', 'BB_upper', 'BB_middle', 'BB_lower', 'ATR', 'Returns', 'Log_Returns', 'Volatility', 'Volume_MA', 'Volume_STD', 'DayOfWeek', 'MonthOfYear', 'EMA_Short', 'EMA_Long', 'EMA_Cross', 'RSI_Direction', 'ATR_Norm', 'Vol_Change', 'Vol_Trend', 'HourOfDay']
+Using device: xla:0
+X_batch device: xla:0
+price device: xla:0
+direction device: xla:0
+volatility device: xla:0
+Model device: xla:0
+Criterion device: xla:0
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 50.00%
+  Step 1 dir accuracy: 1.45%
+  Step 2 dir accuracy: 98.55%
+  Step 3 dir accuracy: 98.55%
+  Step 4 dir accuracy: 1.45%
+Epoch 1: Train Loss: 0.7528, Val Loss: 4.0313, MAPE: 95.13%, RMSE: 3.4427, MAE: 3.4397, Directional Accuracy: 50.00%, LR: 0.000003
+Regime Distribution: [0.24706747 0.26358348 0.24698773 0.24236132]
+Signal Distribution: [0.31871012 0.3510036  0.33028626]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 47.86%
+  Step 1 dir accuracy: 2.00%
+  Step 2 dir accuracy: 97.55%
+  Step 3 dir accuracy: 84.05%
+  Step 4 dir accuracy: 7.85%
+Epoch 2: Train Loss: 0.4459, Val Loss: 1.0521, MAPE: 38.93%, RMSE: 1.4648, MAE: 1.4101, Directional Accuracy: 47.86%, LR: 0.000005
+Regime Distribution: [0.14377043 0.67402685 0.09081274 0.09138996]
+Signal Distribution: [0.14845127 0.47877887 0.3727699 ]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 49.47%
+  Step 1 dir accuracy: 68.40%
+  Step 2 dir accuracy: 34.95%
+  Step 3 dir accuracy: 27.15%
+  Step 4 dir accuracy: 67.40%
+Epoch 3: Train Loss: 0.0681, Val Loss: 0.6194, MAPE: 24.81%, RMSE: 0.9460, MAE: 0.8987, Directional Accuracy: 49.47%, LR: 0.000006
+Regime Distribution: [0.09590537 0.8303703  0.0337222  0.04000211]
+Signal Distribution: [0.1204818  0.5455928  0.33392546]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 48.64%
+  Step 1 dir accuracy: 25.20%
+  Step 2 dir accuracy: 53.75%
+  Step 3 dir accuracy: 51.60%
+  Step 4 dir accuracy: 64.00%
+Epoch 4: Train Loss: 0.0486, Val Loss: 0.4218, MAPE: 16.91%, RMSE: 0.6818, MAE: 0.6131, Directional Accuracy: 48.64%, LR: 0.000008
+Regime Distribution: [0.08858735 0.8624646  0.02191412 0.02703394]
+Signal Distribution: [0.11829476 0.53564847 0.3460568 ]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 47.25%
+  Step 1 dir accuracy: 54.45%
+  Step 2 dir accuracy: 52.95%
+  Step 3 dir accuracy: 7.65%
+  Step 4 dir accuracy: 73.95%
+Epoch 5: Train Loss: 0.0482, Val Loss: 0.3095, MAPE: 10.64%, RMSE: 0.4643, MAE: 0.3864, Directional Accuracy: 47.25%, LR: 0.000010
+Regime Distribution: [0.07535256 0.8884251  0.01626706 0.0199553 ]
+Signal Distribution: [0.11363873 0.5382732  0.34808803]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 50.49%
+  Step 1 dir accuracy: 70.25%
+  Step 2 dir accuracy: 4.20%
+  Step 3 dir accuracy: 40.85%
+  Step 4 dir accuracy: 86.65%
+Epoch 6: Train Loss: 0.0510, Val Loss: 0.2856, MAPE: 10.73%, RMSE: 0.4330, MAE: 0.3889, Directional Accuracy: 50.49%, LR: 0.000010
+Regime Distribution: [0.07363696 0.8924754  0.01531753 0.01857014]
+Signal Distribution: [0.12039734 0.51650476 0.36309785]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 62.00%
+  Step 1 dir accuracy: 88.95%
+  Step 2 dir accuracy: 31.55%
+  Step 3 dir accuracy: 42.20%
+  Step 4 dir accuracy: 85.30%
+Epoch 7: Train Loss: 0.0298, Val Loss: 0.2526, MAPE: 6.84%, RMSE: 0.3258, MAE: 0.2479, Directional Accuracy: 62.00%, LR: 0.000010
+Regime Distribution: [0.234497   0.28259173 0.23319125 0.24972002]
+Signal Distribution: [0.3233521  0.31275266 0.36389527]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 53.11%
+  Step 1 dir accuracy: 75.20%
+  Step 2 dir accuracy: 10.05%
+  Step 3 dir accuracy: 34.85%
+  Step 4 dir accuracy: 92.35%
+Epoch 8: Train Loss: 0.0333, Val Loss: 0.2372, MAPE: 4.86%, RMSE: 0.2330, MAE: 0.1741, Directional Accuracy: 53.11%, LR: 0.000010
+Regime Distribution: [0.25430718 0.26514956 0.23536451 0.24517873]
+Signal Distribution: [0.33107468 0.3299513  0.33897403]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 53.09%
+  Step 1 dir accuracy: 36.45%
+  Step 2 dir accuracy: 77.35%
+  Step 3 dir accuracy: 15.10%
+  Step 4 dir accuracy: 83.45%
+Epoch 9: Train Loss: 0.0370, Val Loss: 0.2244, MAPE: 5.31%, RMSE: 0.2576, MAE: 0.1914, Directional Accuracy: 53.09%, LR: 0.000010
+Regime Distribution: [0.2528208  0.2618406  0.23410004 0.25123852]
+Signal Distribution: [0.335004   0.32022431 0.34477168]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 52.31%
+  Step 1 dir accuracy: 26.65%
+  Step 2 dir accuracy: 85.75%
+  Step 3 dir accuracy: 6.25%
+  Step 4 dir accuracy: 90.60%
+Epoch 10: Train Loss: 0.0421, Val Loss: 0.2332, MAPE: 6.28%, RMSE: 0.2707, MAE: 0.2279, Directional Accuracy: 52.31%, LR: 0.000009
+Regime Distribution: [0.25288203 0.2606216  0.23953614 0.24696021]
+Signal Distribution: [0.3369992  0.32581708 0.3371837 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 54.54%
+  Step 1 dir accuracy: 92.55%
+  Step 2 dir accuracy: 24.95%
+  Step 3 dir accuracy: 11.05%
+  Step 4 dir accuracy: 89.60%
+Epoch 11: Train Loss: 0.0460, Val Loss: 0.2293, MAPE: 5.16%, RMSE: 0.2398, MAE: 0.1868, Directional Accuracy: 54.54%, LR: 0.000009
+Regime Distribution: [0.25038928 0.2590389  0.24642026 0.24415152]
+Signal Distribution: [0.33303702 0.33026755 0.33669543]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 46.08%
+  Step 1 dir accuracy: 2.20%
+  Step 2 dir accuracy: 87.60%
+  Step 3 dir accuracy: 11.95%
+  Step 4 dir accuracy: 82.55%
+Epoch 12: Train Loss: 0.0500, Val Loss: 0.2303, MAPE: 4.51%, RMSE: 0.2104, MAE: 0.1631, Directional Accuracy: 46.08%, LR: 0.000009
+Regime Distribution: [0.25220174 0.25574112 0.2457527  0.24630445]
+Signal Distribution: [0.33003333 0.32960534 0.34036136]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 51.04%
+  Step 1 dir accuracy: 65.65%
+  Step 2 dir accuracy: 29.35%
+  Step 3 dir accuracy: 16.50%
+  Step 4 dir accuracy: 92.65%
+Epoch 13: Train Loss: 0.0563, Val Loss: 0.2153, MAPE: 4.10%, RMSE: 0.1991, MAE: 0.1486, Directional Accuracy: 51.04%, LR: 0.000009
+Regime Distribution: [0.24971278 0.2578102  0.24673343 0.24574357]
+Signal Distribution: [0.33273882 0.32910192 0.33815923]
+Saving model...
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 39.75%
+  Step 1 dir accuracy: 14.60%
+  Step 2 dir accuracy: 40.85%
+  Step 3 dir accuracy: 8.65%
+  Step 4 dir accuracy: 94.90%
+Epoch 14: Train Loss: 0.0602, Val Loss: 0.2254, MAPE: 3.65%, RMSE: 0.1777, MAE: 0.1319, Directional Accuracy: 39.75%, LR: 0.000008
+Regime Distribution: [0.24909805 0.25563955 0.24686886 0.24839355]
+Signal Distribution: [0.3314898  0.32877558 0.33973464]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 55.85%
+  Step 1 dir accuracy: 1.65%
+  Step 2 dir accuracy: 75.40%
+  Step 3 dir accuracy: 56.95%
+  Step 4 dir accuracy: 89.40%
+Epoch 15: Train Loss: 0.0649, Val Loss: 0.2285, MAPE: 3.83%, RMSE: 0.1736, MAE: 0.1375, Directional Accuracy: 55.85%, LR: 0.000008
+Regime Distribution: [0.2506182  0.25633863 0.24441892 0.24862427]
+Signal Distribution: [0.33178997 0.32576564 0.3424444 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 54.56%
+  Step 1 dir accuracy: 90.15%
+  Step 2 dir accuracy: 29.70%
+  Step 3 dir accuracy: 3.20%
+  Step 4 dir accuracy: 95.20%
+Epoch 16: Train Loss: 0.0693, Val Loss: 0.2276, MAPE: 3.70%, RMSE: 0.1726, MAE: 0.1325, Directional Accuracy: 54.56%, LR: 0.000007
+Regime Distribution: [0.24904454 0.25495481 0.24695797 0.24904269]
+Signal Distribution: [0.33157367 0.32793257 0.34049383]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 60.58%
+  Step 1 dir accuracy: 94.70%
+  Step 2 dir accuracy: 48.00%
+  Step 3 dir accuracy: 1.70%
+  Step 4 dir accuracy: 97.90%
+Epoch 17: Train Loss: 0.0688, Val Loss: 0.2254, MAPE: 3.51%, RMSE: 0.1662, MAE: 0.1260, Directional Accuracy: 60.58%, LR: 0.000007
+Regime Distribution: [0.25070348 0.25669852 0.24574156 0.24685642]
+Signal Distribution: [0.33062428 0.33092585 0.3384499 ]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 38.19%
+  Step 1 dir accuracy: 31.10%
+  Step 2 dir accuracy: 17.20%
+  Step 3 dir accuracy: 6.50%
+  Step 4 dir accuracy: 97.95%
+Epoch 18: Train Loss: 0.0675, Val Loss: 0.2285, MAPE: 3.70%, RMSE: 0.1767, MAE: 0.1333, Directional Accuracy: 38.19%, LR: 0.000006
+Regime Distribution: [0.24722266 0.2529731  0.2530438  0.24676046]
+Signal Distribution: [0.3286543  0.33051077 0.34083492]
+Direction targets distribution: 1.16% UP
+Corrected directional accuracy: 67.20%
+  Step 1 dir accuracy: 82.40%
+  Step 2 dir accuracy: 86.30%
+  Step 3 dir accuracy: 3.00%
+  Step 4 dir accuracy: 97.10%
+Epoch 19: Train Loss: 0.0680, Val Loss: 0.2126, MAPE: 3.59%, RMSE: 0.1609, MAE: 0.1289, Directional Accuracy: 67.20%, LR: 0.000006
+Regime Distribution: [0.25001785 0.25751257 0.24698563 0.24548395]
+Signal Distribution: [0.32863995 0.3293468  0.34201327]
+Saving model...
+
+
+
+
