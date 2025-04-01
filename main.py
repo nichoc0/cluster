@@ -22,7 +22,6 @@ import torch_xla.distributed.parallel_loader as pl
 torch.backends.cudnn.benchmark = True
 
 # Configurations - REDUCED DIMENSIONS
-PRED_LENGTH = 1 
 SEQ_LENGTH = 64
 BATCH_SIZE = 8
 EPOCHS = 35
@@ -56,26 +55,6 @@ def safe_fetch(ticker, start, end, retries=15, delay=10):
         time.sleep(sleep_time)
     return None
 
-def resample_to_daily(df):
-    """Resample hourly data to daily timeframes."""
-    # For OHLC data
-    daily_df = df.resample('D').agg({
-        'Open': 'first',
-        'High': 'max',
-        'Low': 'min',
-        'Close': 'last',
-        'Volume': 'sum'
-    })
-    
-    # Handle any other columns by using last value
-    for col in df.columns:
-        if col not in ['Open', 'High', 'Low', 'Close', 'Volume']:
-            try:
-                daily_df[col] = df[col].resample('D').last()
-            except:
-                pass
-                
-    return daily_df
 
 def fetch_chunk(ticker, start, end):
     """
@@ -308,11 +287,11 @@ class EnhancedStockDataset(Dataset):
             
             # Handle flattened raw_prices (reshape if needed)
             if raw_prices.ndim == 2 and raw_prices.shape[1] == y_price.shape[1]:
-                        # Raw prices are already in correct shape
-                        for i in range(len(raw_prices)):
-                            # Compare each price point to the first price in sequence
-                            for j in range(1, min(PRED_LENGTH, raw_prices.shape[1])):
-                                y_direction[i, j] = (raw_prices[i, j] > raw_prices[i, 0]) * 1.0
+                # Raw prices are already in correct shape
+                for i in range(len(raw_prices)):  # Remove the -1 here
+                    # Compare each price point to the first price in sequence
+                    for j in range(1, min(5, raw_prices.shape[1])):
+                        y_direction[i, j] = (raw_prices[i, j] > raw_prices[i, 0]) * 1.0
             else:
                 # Handle reshape case - if raw_prices is flattened
                 try:
@@ -372,7 +351,8 @@ class EnhancedFunnyMachine(nn.Module):
         )
         
         # Regime adaptation
-        self.regime_adapter = nn.Linear(4, PRED_LENGTH)  # 4 regimes to PRED_LENGTH time steps
+        self.regime_adapter = nn.Linear(4, 5)  # 4 regimes to 5 time steps
+
     def forward(self, x):
         results, regime, signals = self.extended_mlstm(x)
         
@@ -423,7 +403,7 @@ def create_sequences(scaled_data, target_scaled, raw_prices=None, seq_length=64,
     else:
         balanced_indices = False
     
-    for i in range(seq_length, len(scaled_data) - PRED_LENGTH):
+    for i in range(seq_length, len(scaled_data) - 5):
         # Skip if using balanced indices and this index isn't in our balanced set
         if balanced_indices and i not in selected_indices:
             continue
@@ -436,15 +416,135 @@ def create_sequences(scaled_data, target_scaled, raw_prices=None, seq_length=64,
             seq = seq + noise
         
         X.append(seq)
-        y.append(target_scaled[i:i+PRED_LENGTH].flatten())
+        y.append(target_scaled[i:i+5].flatten())
         
         if raw_prices is not None:
-            raw_price_seqs.append(raw_prices[i:i+PRED_LENGTH].flatten())
+            raw_price_seqs.append(raw_prices[i:i+5].flatten())
             
     if raw_prices is not None:
         return np.array(X), np.array(y), np.array(raw_price_seqs)
     else:
         return np.array(X), np.array(y)
+
+def get_cluster_data(tickers, start_date='2010-01-01', end_date='2023-12-31', max_workers=3):
+    """
+    Fetch and prepare data for a cluster of stocks.
+    
+    Args:
+        tickers: List of stock ticker symbols in the cluster
+        start_date: Start date for data collection
+        end_date: End date for data collection
+        max_workers: Number of parallel workers for downloading
+        
+    Returns:
+        Dictionary mapping each ticker to its processed dataframe
+    """
+    print(f"Getting data for cluster of {len(tickers)} stocks: {', '.join(tickers)}")
+    
+    cluster_data = {}
+    
+    for ticker in tickers:
+        print(f"\nProcessing {ticker}...")
+        try:
+            # Get daily data
+            daily_data = get_daily_data(ticker, start_date, end_date)
+            
+            # Get hourly data (using a shorter timeframe for hourly data to manage size)
+            hourly_start = pd.to_datetime(end_date) - pd.Timedelta(days=365)  # Last year only
+            hourly_start_str = hourly_start.strftime('%Y-%m-%d')
+            hourly_data = get_hourly_data(ticker, hourly_start_str, end_date, max_workers)
+            
+            if daily_data.empty or hourly_data.empty:
+                print(f"Warning: Missing data for {ticker}, skipping")
+                continue
+                
+            # Merge daily and hourly data
+            merged_data = merge_datasets(daily_data, hourly_data)
+            
+            # Add ticker identifier column
+            merged_data['Ticker'] = ticker
+            
+            # Add technical indicators
+            processed_data = prepare_data(merged_data)
+            
+            cluster_data[ticker] = processed_data
+            print(f"Successfully processed {ticker}: {len(processed_data)} datapoints")
+            
+        except Exception as e:
+            print(f"Error processing {ticker}: {e}")
+    
+    return cluster_data
+
+def create_cluster_sequences(cluster_data, seq_length=64, pred_steps=5, include_tickers=None):
+    """
+    Create sequences from a cluster of stocks for training.
+    
+    Args:
+        cluster_data: Dictionary mapping tickers to dataframes
+        seq_length: Length of input sequences
+        pred_steps: Number of steps to predict
+        include_tickers: List of tickers to include (None = all)
+        
+    Returns:
+        X, y data suitable for the model
+    """
+    all_X = []
+    all_y = []
+    all_raw_prices = []
+    all_tickers = []
+    
+    # Filter tickers if specified
+    tickers = include_tickers if include_tickers else list(cluster_data.keys())
+    
+    for ticker in tickers:
+        if ticker not in cluster_data:
+            print(f"Warning: {ticker} not found in cluster data")
+            continue
+            
+        df = cluster_data[ticker]
+        
+        # Skip tickers with insufficient data
+        if len(df) < seq_length + pred_steps:
+            print(f"Warning: {ticker} has insufficient data ({len(df)} points)")
+            continue
+            
+        # Scale the data
+        feature_scaler = RobustScaler()
+        target_scaler = RobustScaler()
+        
+        # Extract features and target
+        features = df.drop(columns=['Close', 'Ticker'])
+        target = df['Close'].values.reshape(-1, 1)
+        
+        # Scale data
+        X_scaled = feature_scaler.fit_transform(features)
+        y_scaled = target_scaler.fit_transform(target)
+        
+        # Create sequences
+        X_seq, y_seq, raw_seq = create_sequences(
+            X_scaled, y_scaled, raw_prices=target, 
+            seq_length=seq_length, augment=False, balance_directions=False
+        )
+        
+        # Create ticker info array (same ticker for all sequences)
+        ticker_info = np.array([ticker] * len(X_seq))
+        
+        # Append to overall arrays
+        all_X.append(X_seq)
+        all_y.append(y_seq)
+        all_raw_prices.append(raw_seq)
+        all_tickers.append(ticker_info)
+    
+    # Combine all data
+    X = np.concatenate(all_X, axis=0) if all_X else np.array([])
+    y = np.concatenate(all_y, axis=0) if all_y else np.array([])
+    raw_prices = np.concatenate(all_raw_prices, axis=0) if all_raw_prices else np.array([])
+    tickers = np.concatenate(all_tickers, axis=0) if all_tickers else np.array([])
+    
+    print(f"Created {len(X)} sequences from {len(tickers)} stocks")
+    return X, y, raw_prices, tickers
+
+
 
 def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
     device = xm.xla_device()
@@ -649,9 +749,7 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
         directional_accuracy = 0.0
 
         # Corrected directional accuracy calculation - using binary comparison matching the labels
-        # In train_model function, update the directional accuracy calculation
-        # Corrected directional accuracy calculation - using binary comparison matching the labels
-        if all_price_targets.shape[1] > 1:  # Multi-day predictions
+        if all_price_targets.shape[1] > 1:
             # Calculate price differences between consecutive predictions
             diff_pred = all_price_outputs[:, 1:] - all_price_outputs[:, :-1]
             diff_true = all_price_targets[:, 1:] - all_price_targets[:, :-1]
@@ -670,11 +768,9 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
             for step in range(binary_pred_up.shape[1]):
                 step_accuracy = torch.mean((binary_pred_up[:, step] == binary_true_up[:, step]).float()) * 100
                 print(f"  Step {step+1} dir accuracy: {step_accuracy:.2f}%")
-        else:  # Single-day prediction (PRED_LENGTH = 1)
-            # For single-day predictions, we use the model's explicit direction output
-            # Threshold at 0.5 to convert probabilities to binary predictions
+        else:
             directional_accuracy = torch.mean((all_direction_outputs > 0.5).float() == all_direction_targets) * 100
-            print(f"Daily directional accuracy: {directional_accuracy:.2f}%")
+        
         # Monitor signal distribution
         signal_distribution = all_signals.mean(dim=0)
         regime_distribution = all_regimes.mean(dim=0)
@@ -722,128 +818,169 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
     return model
         
 def main():
-    alreadygot = False
+    # Set TPU device
     device = xm.xla_device()
     print(f"Using TPU device: {device}")
 
-    if (alreadygot):
-        daily_data = pd.read_csv('/kaggle/input/msftdat/MSFT_daily_2010-01-01_2023-12-31.csv', 
-                        skiprows=[1,2],  # Skip the metadata rows
-                        index_col=0,
-                        parse_dates=True)
-        hourly_data = pd.read_csv('/kaggle/input/msftdat/MSFT_hourly_2023-02-24_2025-02-16.csv', 
-                         index_col=0, 
-                         parse_dates=True)
-    else: 
-        daily_data = pd.read_csv('/kaggle/input/msftdat/MSFT_daily_2010-01-01_2023-12-31.csv', 
-                        skiprows=[1,2],  # Skip the metadata rows
-                        index_col=0,
-                        parse_dates=True)
-        hourly_data = pd.read_csv('/kaggle/input/msftdat/MSFT_hourly_2023-02-24_2025-02-16.csv', 
-                         index_col=0, 
-                         parse_dates=True)
-
-        # Convert data types after loading
-        numeric_columns = ['Close', 'High', 'Low', 'Open', 'Volume']
-        for col in numeric_columns:
-            daily_data[col] = pd.to_numeric(daily_data[col], errors='coerce')
-            hourly_data[col] = pd.to_numeric(hourly_data[col], errors='coerce')
-
-    df = merge_datasets(daily_data, hourly_data)
-    df = resample_to_daily(df)
-
-    df = add_technical_indicators(df)
-    processed_df = prepare_data(df)
-    print("After prepare_data:", len(processed_df))
-
-    target = processed_df['Close'].values.reshape(-1, 1)
-    features = processed_df.drop(columns=['Close'])
-    tscv = TimeSeriesSplit(n_splits=5)
-
-    for fold, (train_idx, val_idx) in enumerate(tscv.split(features)):
-        print(f"Training fold {fold+1}")
-        X_train, X_val = features.iloc[train_idx], features.iloc[val_idx]
-        y_train, y_val = target[train_idx], target[val_idx]
-
-        feature_scaler = RobustScaler()
-        target_scaler = RobustScaler()
-        X_train_scaled = feature_scaler.fit_transform(X_train)
-        X_val_scaled = feature_scaler.transform(X_val)
-        y_train_scaled = target_scaler.fit_transform(y_train)
-        y_val_scaled = target_scaler.transform(y_val)
-        # Store original unscaled prices for direction labels - add after y_train/y_val creation
-        raw_prices_train = y_train.copy()  
-        raw_prices_val = y_val.copy()
-
-        print("Before scaling - check for UP/DOWN balance:")
-        up_count = np.sum(np.diff(raw_prices_train, axis=0) > 0)
-        down_count = np.sum(np.diff(raw_prices_train, axis=0) < 0)
-        print(f"Original train price direction: {up_count} UP, {down_count} DOWN ({up_count/(up_count+down_count)*100:.2f}% UP)")
-
-        # In main function:
-        X_train_seq, y_train_seq, raw_train_seq = create_sequences(
-            X_train_scaled, y_train_scaled, raw_prices=raw_prices_train, 
-            seq_length=SEQ_LENGTH, balance_directions=True
+    # Define tech stock cluster
+    tech_stocks = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'AMD', 'INTC']
+    print(f"Processing cluster of {len(tech_stocks)} tech stocks: {', '.join(tech_stocks)}")
+    
+    # Flag to control data retrieval vs using cached data
+    alreadygot = False
+    
+    if alreadygot:
+        # Load pre-saved cluster data
+        cluster_data = {}
+        for ticker in tech_stocks:
+            try:
+                df_path = f"{ticker}_processed_data.csv"
+                df = pd.read_csv(df_path, index_col=0, parse_dates=True)
+                if not df.empty:
+                    cluster_data[ticker] = df
+                    print(f"Loaded {ticker} data: {len(df)} points")
+            except FileNotFoundError:
+                print(f"No saved data for {ticker}")
+    else:
+        # Fetch and process cluster data
+        cluster_data = get_cluster_data(
+            tech_stocks,
+            start_date='2018-01-01',  # 5 years of data
+            end_date='2023-12-31'
         )
-        X_val_seq, y_val_seq, raw_val_seq = create_sequences(
-            X_val_scaled, y_val_scaled, raw_prices=raw_prices_val, 
-            seq_length=SEQ_LENGTH, augment=False, balance_directions=False
-        )
-        print("Sequence size:", len(X_train_seq))
-        print(f"Train sequences: {X_train_seq.shape}, Targets: {y_train_seq.shape}")
-
-        # Use larger dataset with balanced samples
-        max_samples = min(8000, len(X_train_seq))
         
-        # Sort by volatility to ensure balanced sampling
-        volatility = np.abs(np.diff(y_train_seq, axis=1)).mean(axis=1)
+        # Save processed data for future use
+        for ticker, df in cluster_data.items():
+            df.to_csv(f"{ticker}_processed_data.csv")
+    
+    # Create sequences from the cluster data
+    X, y, raw_prices, tickers = create_cluster_sequences(
+        cluster_data,
+        seq_length=SEQ_LENGTH,
+        pred_steps=5  # Predicting 5 hours ahead
+    )
+    
+    print(f"Created {len(X)} sequences from {len(cluster_data)} stocks")
+    
+    # Use time-based train/val split (80/20)
+    split_idx = int(len(X) * 0.8)
+    
+    X_train, X_val = X[:split_idx], X[split_idx:]
+    y_train, y_val = y[:split_idx], y[split_idx:]
+    raw_train, raw_val = raw_prices[:split_idx], raw_prices[split_idx:]
+    
+    # Balance training data if very large
+    if len(X_train) > 8000:
+        print("Balancing large training dataset...")
+        # Sort by volatility for balanced sampling
+        volatility = np.abs(np.diff(y_train, axis=1)).mean(axis=1)
         indices = np.argsort(volatility)
         
-        # Take evenly spaced samples to get a range of volatility levels
+        # Take evenly spaced samples for range of volatility levels
+        max_samples = 8000
         step = max(1, len(indices) // max_samples)
         selected_indices = indices[::step][:max_samples]
         
-        # Limit validation to reasonable size
-        max_val = min(2000, len(X_val_seq))
-        X_val_seq = X_val_seq[:max_val]
-        y_val_seq = y_val_seq[:max_val]
-        raw_val_seq = raw_val_seq[:max_val]  # Add this line to keep sizes aligned
-
-        # Also update training data to keep aligned
-        X_train_seq = X_train_seq[selected_indices]
-        y_train_seq = y_train_seq[selected_indices]
-        raw_train_seq = raw_train_seq[selected_indices]  # Add this line too
-        
-        print(f"Using dataset - Train: {len(X_train_seq)}, Val: {len(X_val_seq)}")
-        
-        # Create datasets
-        # Create datasets with raw price information
-        train_dataset = EnhancedStockDataset(X_train_seq, y_train_seq, raw_prices=raw_train_seq, y_direction=None, y_volatility=None)
-        val_dataset = EnhancedStockDataset(X_val_seq, y_val_seq, raw_prices=raw_val_seq, y_direction=None, y_volatility=None)
-         # Use TPU-optimized data loaders
-        train_loader = create_tpu_dataloader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = create_tpu_dataloader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-        
-        # Create model and move to TPU device
-        model = EnhancedFunnyMachine(
-            input_size=X_train_seq.shape[2],
+        X_train = X_train[selected_indices]
+        y_train = y_train[selected_indices]
+        raw_train = raw_train[selected_indices]
+    
+    # Limit validation size for efficiency
+    max_val = min(2000, len(X_val))
+    X_val = X_val[:max_val]
+    y_val = y_val[:max_val]
+    raw_val = raw_val[:max_val]
+    
+    print(f"Final datasets - Train: {len(X_train)}, Val: {len(X_val)}")
+    
+    # Create datasets with raw price information
+    train_dataset = EnhancedStockDataset(X_train, y_train, raw_prices=raw_train)
+    val_dataset = EnhancedStockDataset(X_val, y_val, raw_prices=raw_val)
+    
+    # Use TPU-optimized data loaders
+    train_loader = create_tpu_dataloader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = create_tpu_dataloader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    
+    # Create model and move to TPU device
+    model = EnhancedFunnyMachine(
+        input_size=X_train.shape[2],
+        hidden_size=16,
+        matrix_size=4,
+        dropout=0.3
+    )
+    model = model.to(device)
+    
+    print("Enhanced s_mLSTM Stock Cluster Prediction Model:")
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total parameters: {total_params:,}")
+    
+    # Train model
+    train_model(model, train_loader, val_loader, None, epochs=EPOCHS)
+    
+    # Export to ONNX for QuantConnect
+    try:
+        # Create CPU model for export
+        cpu_model = EnhancedFunnyMachine(
+            input_size=X_train.shape[2],
             hidden_size=16,
             matrix_size=4,
-            dropout=0.3
+            dropout=0.0  # Set to 0 for inference
+        ).cpu()
+        
+        # Load trained weights
+        cpu_model.load_state_dict(model.state_dict())
+        cpu_model.eval()
+        
+        # Create wrapper for multiple outputs
+        class ONNXWrapper(nn.Module):
+            def __init__(self, base_model):
+                super().__init__()
+                self.base_model = base_model
+            
+            def forward(self, x):
+                results, regime, signals = self.base_model(x)
+                return results['price'], results['direction'], results['volatility']
+        
+        wrapped_model = ONNXWrapper(cpu_model)
+        
+        # Create dummy input
+        dummy_input = torch.randn(1, SEQ_LENGTH, X_train.shape[2])
+        
+        # Export to ONNX
+        torch.onnx.export(
+            wrapped_model,
+            dummy_input,
+            "tech_cluster_model.onnx",
+            export_params=True,
+            opset_version=12,
+            do_constant_folding=True,
+            input_names=['input'],
+            output_names=['price', 'direction', 'volatility'],
+            dynamic_axes={
+                'input': {0: 'batch_size'},
+                'price': {0: 'batch_size'},
+                'direction': {0: 'batch_size'},
+                'volatility': {0: 'batch_size'}
+            }
         )
-        model = model.to(device)
-        
-        print("Enhanced s_mLSTM Stock Prediction Model:")
-        print(model)
-        total_params = sum(p.numel() for p in model.parameters())
-        print(f"Total parameters: {total_params:,}")
-        
-        feature_names = list(features.columns)
-        print(f"Using {len(feature_names)} features: {feature_names}")
-        
-        # Train with TPU-optimized function
-        train_model(model, train_loader, val_loader, target_scaler, epochs=EPOCHS)
-        #break  # Just one fold for now
+        print("Model exported to ONNX format for QuantConnect")
+    except Exception as e:
+        print(f"Error exporting to ONNX: {e}")
+    
+    # Save PyTorch model with metadata
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'config': {
+            'input_size': X_train.shape[2],
+            'hidden_size': 16,
+            'matrix_size': 4,
+            'dropout': 0.0
+        },
+        'cluster': tech_stocks,
+        'seq_length': SEQ_LENGTH
+    }, 'tech_cluster_model.pth')
+    
+    print("Training completed. Model saved to tech_cluster_model.pth")
 
 if __name__ == "__main__":
     main()

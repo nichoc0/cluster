@@ -6,8 +6,6 @@ import torch.nn.functional as F
 import math
 import numpy as np
 from torch.utils.checkpoint import checkpoint
-PRED_LENGTH = 1 
-
 
 def asymmetric_directional_loss(y_pred, y_true, up_penalty=2.0, down_penalty=1.0):
     """
@@ -689,9 +687,9 @@ class ParallelExtendedSMLSTM(nn.Module):
         self.output_projection.weight.data *= 0.1
         self.regime_detector = nn.Linear(self.pre_fc_dim, 4)
         self.signal_generator = nn.Linear(self.pre_fc_dim, 3)
-        self.price_head = nn.Linear(self.pre_fc_dim, PRED_LENGTH)  
-        self.direction_head = nn.Linear(self.pre_fc_dim, PRED_LENGTH)
-        self.volatility_head = nn.Linear(self.pre_fc_dim, PRED_LENGTH)
+        self.price_head = nn.Linear(self.pre_fc_dim, 5)
+        self.direction_head = nn.Linear(self.pre_fc_dim, 5)
+        self.volatility_head = nn.Linear(self.pre_fc_dim, 5)
 
     def forward(self, x):
         x = self.input_projection(x)
