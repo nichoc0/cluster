@@ -810,30 +810,30 @@ def create_cluster_sequences(cluster_data, seq_length=64, pred_steps=5, include_
 
 
 
-def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
+def train_universal_model(model, train_loader, val_loader, target_scaler, epochs=100):
     device = xm.xla_device()
     print(f"Using device: {device}")
     model.to(device)
     
-     # Wrap with parallel loader for TPU
+    # Wrap with parallel loader for TPU
     train_loader = pl.MpDeviceLoader(train_loader, device)
     val_loader = pl.MpDeviceLoader(val_loader, device)
     
-    #
+    # Loss functions
     criterion_price = nn.HuberLoss(delta=1.0)
     pos_weight = torch.tensor([2.0]).to(device)
     criterion_direction = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
     criterion_volatility = nn.MSELoss()
     
-    # Warmup learning rate - start small then increase
+    # Optimizer with warmup learning rate
     optimizer = AdamW(
         model.parameters(), 
-        lr=1e-5,  # Start with very small learning rate
-        weight_decay=1e-5,  # Less aggressive regularization
+        lr=1e-5,
+        weight_decay=1e-5,
         eps=1e-8
     )
     
-    # Learning rate warmup then decay
+    # Learning rate scheduler
     def lr_schedule(epoch):
         if epoch < 5:
             # Warmup phase - linear increase from 0.1x to 1x
@@ -844,6 +844,7 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
     
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_schedule)
     
+    # Training variables
     best_val_loss = float('inf')
     patience = 8
     min_delta = 1e-4
@@ -852,34 +853,31 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
     
     regime_history = []  # Track market regime predictions
     
-    # Memory tracking
-
     for epoch in range(epochs):
         model.train()
         train_loss = 0
         num_batches = 0
         
-        # Add curriculum learning - focus first on price, then direction
-        # In train_model function, replace the current line:
-        dir_weight = min(1.0 + epoch / 5, 5.0)  # Start higher (1.0), increase faster (1/5), higher max (5.0)
-        vol_weight = min(0.2 + epoch / 20, 0.5)  # Gradually increase volatility weight
+        # Curriculum learning - focus first on price, then direction
+        dir_weight = min(1.0 + epoch / 5, 5.0)
+        vol_weight = min(0.2 + epoch / 20, 0.5)
         
         optimizer.zero_grad()  # Zero gradients at the start of epoch
         
-        for batch_idx, (X_batch, y_batch) in enumerate(train_loader):
+        for batch_idx, (X_batch, y_batch, ticker_idx) in enumerate(train_loader):
             if batch_idx == 0 and epoch == 0:
-                print(f"X_batch device: {X_batch.device}")
+                print(f"X_batch shape: {X_batch.shape}")
+                print(f"ticker_idx shape: {ticker_idx.shape}")
                 for k, v in y_batch.items():
-                    print(f"{k} device: {v.device}")
-                print(f"Model device: {next(model.parameters()).device}")
-                print(f"Criterion device: {pos_weight.device}")
+                    print(f"{k} shape: {v.shape}")
             
             X_batch = X_batch.to(device)
+            ticker_idx = ticker_idx.to(device)
             y_batch = {k: v.to(device) for k, v in y_batch.items()}
             
             try:
-                # No autocast wrapper needed for TPU
-                results, regime, signals = model(X_batch)
+                # Forward pass
+                results, regime, signals = model(X_batch, ticker_idx)
                 
                 # Ensure results is properly formatted
                 if not isinstance(results, dict) or 'price' not in results:
@@ -890,6 +888,7 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
                             'volatility': F.softplus(results)
                         }
                 
+                # Calculate losses
                 price_loss = criterion_price(results['price'], y_batch['price'])
                 
                 if 'direction_logits' in results:
@@ -901,18 +900,19 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
                     
                 volatility_loss = criterion_volatility(results['volatility'], y_batch['volatility'])
                 
-                # In the training loop where you calculate loss:
+                # Combined loss
                 loss = price_loss + dir_weight * direction_loss + vol_weight * volatility_loss
 
-                # Add regime balance regularization - encourage equal distribution among regimes
-                regime_target = torch.ones(regime.shape[1], device=device) / regime.shape[1]  # Equal distribution
+                # Regime balance regularization
+                regime_target = torch.ones(regime.shape[1], device=device) / regime.shape[1]
                 regime_balance_loss = F.kl_div(
                     F.log_softmax(regime.mean(dim=0, keepdim=True), dim=1),
                     regime_target.unsqueeze(0),
                     reduction='batchmean'
                 )
-                loss = loss + 0.1 * regime_balance_loss  # Add with weight of 0.1
-                                # Apply regularization for diversity
+                loss = loss + 0.1 * regime_balance_loss
+                
+                # Diversity regularization
                 if epoch > 5:
                     regime = regime.to(device)
                     signals = signals.to(device)
@@ -925,27 +925,28 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
             except Exception as e:
                 print(f"Error in training batch {batch_idx}: {e}")
                 continue
-                # TPU-friendly backward pass
+                
+            # Backward pass
             loss.backward()
             
-            # Every 2 batches, update weights
+            # Update weights every 2 batches
             if (batch_idx + 1) % 2 == 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=GRAD_CLIP_VALUE)
                 optimizer.step()
                 optimizer.zero_grad()
-                # Critical for TPU execution
-                xm.mark_step()
+                xm.mark_step()  # Critical for TPU execution
             
             train_loss += loss.item() * 2
             num_batches += 1
         
-        # Make sure to update with any remaining gradients
+        # Handle remaining gradients
         if (batch_idx + 1) % 2 != 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=GRAD_CLIP_VALUE)
             optimizer.step()
             optimizer.zero_grad()
-            xm.mark_step()  # Critical for TPU execution
+            xm.mark_step()
         
+        # Evaluation
         model.eval()
         val_loss = 0
         all_price_outputs = []
@@ -956,14 +957,18 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
         all_volatility_targets = []
         all_regimes = []
         all_signals = []
+        all_ticker_indices = []
                 
         with torch.no_grad():
-            for X_val, y_val in val_loader:
+            for X_val, y_val, ticker_idx in val_loader:
                 X_val = X_val.to(device)
+                ticker_idx = ticker_idx.to(device)
                 y_val = {k: v.to(device) for k, v in y_val.items()}
                 
-                # No autocast needed for TPU
-                results, regime, signals = model(X_val)
+                # Forward pass
+                results, regime, signals = model(X_val, ticker_idx)
+                
+                # Calculate losses
                 val_loss += criterion_price(results['price'], y_val['price']).item()
                 
                 if 'direction_logits' in results:
@@ -974,7 +979,7 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
                     
                 val_loss += criterion_volatility(results['volatility'], y_val['volatility']).item()
                 
-                # Move results to host immediately for TPU memory management
+                # Collect results
                 all_price_outputs.append(results['price'].cpu())
                 all_direction_outputs.append(results['direction'].cpu() if 'direction' in results else 
                                             torch.sigmoid(results['direction_logits']).cpu())
@@ -986,11 +991,11 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
                 
                 all_regimes.append(regime.cpu())
                 all_signals.append(signals.cpu())
+                all_ticker_indices.append(ticker_idx.cpu())
                 
-                # Execute all pending XLA operations
                 xm.mark_step()
         
-        # Process outputs correctly for each prediction type
+        # Combine results
         all_price_outputs = torch.cat(all_price_outputs, dim=0)
         all_direction_outputs = torch.cat(all_direction_outputs, dim=0)
         all_volatility_outputs = torch.cat(all_volatility_outputs, dim=0)
@@ -1001,48 +1006,64 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
         
         all_regimes = torch.cat(all_regimes, dim=0)
         all_signals = torch.cat(all_signals, dim=0)
+        all_ticker_indices = torch.cat(all_ticker_indices, dim=0)
         
-        # Calculate metrics (same as before)
+        # Calculate overall metrics
         price_mape = torch.mean(torch.abs((all_price_targets - all_price_outputs) / (all_price_targets + 1e-8))) * 100
         price_rmse = torch.sqrt(torch.mean((all_price_targets - all_price_outputs) ** 2))
         price_mae = torch.mean(torch.abs(all_price_targets - all_price_outputs))
         
-        # Print direction label statistics to debug
+        # Direction metrics
         direction_true_percent = torch.mean(all_direction_targets) * 100
         print(f"Direction targets distribution: {direction_true_percent:.2f}% UP")
         directional_accuracy = 0.0
 
-        # Corrected directional accuracy calculation - using binary comparison matching the labels
+        # Calculate directional accuracy
         if all_price_targets.shape[1] > 1:
-            # Calculate price differences between consecutive predictions
             diff_pred = all_price_outputs[:, 1:] - all_price_outputs[:, :-1]
             diff_true = all_price_targets[:, 1:] - all_price_targets[:, :-1]
             
-            # Convert to binary UP (>0) matching the label creation logic
             binary_pred_up = (diff_pred > 0).float()
             binary_true_up = (diff_true > 0).float()
             
-            # Calculate accuracy using the binary representation
-            corrected_dir_accuracy = torch.mean((binary_pred_up == binary_true_up).float()) * 100
-            directional_accuracy = corrected_dir_accuracy  # Set the common variable
-
-            print(f"Corrected directional accuracy: {corrected_dir_accuracy:.2f}%")
+            directional_accuracy = torch.mean((binary_pred_up == binary_true_up).float()) * 100
+            print(f"Overall directional accuracy: {directional_accuracy:.2f}%")
             
-            # Also calculate per-step accuracies
+            # Per-step accuracies
             for step in range(binary_pred_up.shape[1]):
                 step_accuracy = torch.mean((binary_pred_up[:, step] == binary_true_up[:, step]).float()) * 100
                 print(f"  Step {step+1} dir accuracy: {step_accuracy:.2f}%")
         else:
             directional_accuracy = torch.mean((all_direction_outputs > 0.5).float() == all_direction_targets) * 100
         
-        # Monitor signal distribution
+        # Calculate per-stock metrics
+        unique_tickers = torch.unique(all_ticker_indices)
+        print("\nPer-stock performance:")
+        for ticker_idx in unique_tickers:
+            idx = ticker_idx.item()
+            mask = (all_ticker_indices == idx)
+            
+            # Skip if no samples
+            if not mask.any():
+                continue
+                
+            ticker_outputs = all_price_outputs[mask]
+            ticker_targets = all_price_targets[mask]
+            
+            ticker_mape = torch.mean(torch.abs((ticker_targets - ticker_outputs) / (ticker_targets + 1e-8))) * 100
+            ticker_rmse = torch.sqrt(torch.mean((ticker_targets - ticker_outputs) ** 2))
+            
+            print(f"  Stock {idx}: MAPE={ticker_mape:.2f}%, RMSE={ticker_rmse:.4f}")
+        
+        # Signal and regime distributions
         signal_distribution = all_signals.mean(dim=0)
         regime_distribution = all_regimes.mean(dim=0)
         
-        # Store regime history for later analysis
+        # Store regime history
         regime_history.append(regime_distribution.numpy())
         
-        train_loss /= len(train_loader)
+        # Finalize epoch
+        train_loss /= num_batches
         val_loss /= len(val_loader)
         scheduler.step()
         
@@ -1052,11 +1073,11 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
         print(f'Regime Distribution: {regime_distribution.numpy()}')
         print(f'Signal Distribution: {signal_distribution.numpy()}')
 
+        # Early stopping check
         if val_loss < (best_val_loss - min_delta):
             best_val_loss = val_loss
             waiting = 0
             print("Saving model...")
-            # TPU-friendly model saving
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -1069,9 +1090,8 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
                 'regime_distribution': regime_distribution,
                 'signal_distribution': signal_distribution,
                 'regime_history': regime_history,
-            }, 'smLSTM_predictor_MSFT.pth')
+            }, 'universal_stock_model_checkpoint.pth')
             
-            # Wait for save operation to complete on TPU
             xm.mark_step()
         else:
             waiting += 1
@@ -1080,129 +1100,129 @@ def train_model(model, train_loader, val_loader, target_scaler, epochs=100):
                 break
 
     return model
-        
 def main():
-    alreadygot = False
+    # Define a set of stocks for the universal model
+    tickers = [
+        'AAPL',  # Apple
+        'MSFT',  # Microsoft
+        'AMZN',  # Amazon
+        'GOOGL', # Google/Alphabet
+        'META',  # Meta/Facebook
+        'TSLA',  # Tesla
+        'NVDA',  # NVIDIA
+        'JPM',   # JPMorgan Chase
+        'V',     # Visa
+        'WMT'    # Walmart
+    ]
+    
+    print(f"Building universal model for {len(tickers)} stocks: {', '.join(tickers)}")
+    
+    # Prepare data for all stocks - note this might take a while
+    start_date = '2018-01-01'  # Using a more recent start date to keep data size manageable
+    end_date = '2023-12-31'
+    
+    # Get data for all stocks
+    stock_data_dict = prepare_multi_stock_data(
+        tickers=tickers,
+        start_date=start_date,
+        end_date=end_date,
+        seq_length=SEQ_LENGTH,
+        balance_directions=True
+    )
+    
+    # Check how many stocks we have usable data for
+    print(f"Successfully processed data for {len(stock_data_dict)} stocks")
+    if len(stock_data_dict) == 0:
+        print("No usable stock data. Exiting.")
+        return
+    
+    # Get the feature dimension from the first stock
+    first_ticker = list(stock_data_dict.keys())[0]
+    feature_dim = stock_data_dict[first_ticker]['X'].shape[2]
+    
+    # Create train/validation split
+    train_data, val_data = create_multi_stock_train_val_split(
+        stock_data_dict, 
+        val_ratio=0.15,
+        time_based=True  # Use most recent data for validation
+    )
+    
+    # Create data loaders
+    train_loader, val_loader = create_universal_dataloaders(
+        train_data, 
+        val_data, 
+        batch_size=BATCH_SIZE
+    )
+    
+    # Initialize the universal model
+    model = UniversalStockModel(
+        input_size=feature_dim,
+        num_stocks=len(stock_data_dict),
+        embedding_dim=32,
+        hidden_size=16,
+        matrix_size=4,
+        dropout=0.3,
+        use_static_features=True
+    )
+    
+    # Get device
     device = xm.xla_device()
-    print(f"Using TPU device: {device}")
-
-    if (alreadygot):
-        daily_data = pd.read_csv('/kaggle/input/msftdat/MSFT_daily_2010-01-01_2023-12-31.csv', 
-                        skiprows=[1,2],  # Skip the metadata rows
-                        index_col=0,
-                        parse_dates=True)
-        hourly_data = pd.read_csv('/kaggle/input/msftdat/MSFT_hourly_2023-02-24_2025-02-16.csv', 
-                         index_col=0, 
-                         parse_dates=True)
-    else: 
-        daily_data = pd.read_csv('/kaggle/input/msftdat/MSFT_daily_2010-01-01_2023-12-31.csv', 
-                        skiprows=[1,2],  # Skip the metadata rows
-                        index_col=0,
-                        parse_dates=True)
-        hourly_data = pd.read_csv('/kaggle/input/msftdat/MSFT_hourly_2023-02-24_2025-02-16.csv', 
-                         index_col=0, 
-                         parse_dates=True)
-
-        # Convert data types after loading
-        numeric_columns = ['Close', 'High', 'Low', 'Open', 'Volume']
-        for col in numeric_columns:
-            daily_data[col] = pd.to_numeric(daily_data[col], errors='coerce')
-            hourly_data[col] = pd.to_numeric(hourly_data[col], errors='coerce')
-
-        df = merge_datasets(daily_data, hourly_data)
-
-    df = add_technical_indicators(df)
-    processed_df = prepare_data(df)
-    print("After prepare_data:", len(processed_df))
-
-    target = processed_df['Close'].values.reshape(-1, 1)
-    features = processed_df.drop(columns=['Close'])
-    tscv = TimeSeriesSplit(n_splits=5)
-
-    for fold, (train_idx, val_idx) in enumerate(tscv.split(features)):
-        print(f"Training fold {fold+1}")
-        X_train, X_val = features.iloc[train_idx], features.iloc[val_idx]
-        y_train, y_val = target[train_idx], target[val_idx]
-
-        feature_scaler = RobustScaler()
-        target_scaler = RobustScaler()
-        X_train_scaled = feature_scaler.fit_transform(X_train)
-        X_val_scaled = feature_scaler.transform(X_val)
-        y_train_scaled = target_scaler.fit_transform(y_train)
-        y_val_scaled = target_scaler.transform(y_val)
-        # Store original unscaled prices for direction labels - add after y_train/y_val creation
-        raw_prices_train = y_train.copy()  
-        raw_prices_val = y_val.copy()
-
-        print("Before scaling - check for UP/DOWN balance:")
-        up_count = np.sum(np.diff(raw_prices_train, axis=0) > 0)
-        down_count = np.sum(np.diff(raw_prices_train, axis=0) < 0)
-        print(f"Original train price direction: {up_count} UP, {down_count} DOWN ({up_count/(up_count+down_count)*100:.2f}% UP)")
-
-        # In main function:
-        X_train_seq, y_train_seq, raw_train_seq = create_sequences(
-            X_train_scaled, y_train_scaled, raw_prices=raw_prices_train, 
-            seq_length=SEQ_LENGTH, balance_directions=True
-        )
-        X_val_seq, y_val_seq, raw_val_seq = create_sequences(
-            X_val_scaled, y_val_scaled, raw_prices=raw_prices_val, 
-            seq_length=SEQ_LENGTH, augment=False, balance_directions=False
-        )
-        print("Sequence size:", len(X_train_seq))
-        print(f"Train sequences: {X_train_seq.shape}, Targets: {y_train_seq.shape}")
-
-        # Use larger dataset with balanced samples
-        max_samples = min(8000, len(X_train_seq))
+    print(f"Using device: {device}")
+    
+    # Get a sample batch to inspect
+    X_sample, targets_sample, ticker_idx_sample = next(iter(train_loader))
+    print(f"X shape: {X_sample.shape}")
+    print(f"Target keys: {list(targets_sample.keys())}")
+    print(f"Ticker indices shape: {ticker_idx_sample.shape}")
+    
+    # Ticker mapping for reference
+    ticker_to_idx = {ticker: idx for idx, ticker in enumerate(stock_data_dict.keys())}
+    idx_to_ticker = {idx: ticker for ticker, idx in ticker_to_idx.items()}
+    print("Ticker mapping:")
+    for idx, ticker in idx_to_ticker.items():
+        print(f"  {idx}: {ticker}")
+    
+    # Forward pass to test model
+    try:
+        # Move to device
+        X_sample = X_sample.to(device)
+        ticker_idx_sample = ticker_idx_sample.to(device)
         
-        # Sort by volatility to ensure balanced sampling
-        volatility = np.abs(np.diff(y_train_seq, axis=1)).mean(axis=1)
-        indices = np.argsort(volatility)
+        # Forward pass
+        with torch.no_grad():
+            model = model.to(device)
+            results, regime, signals = model(X_sample, ticker_idx_sample)
         
-        # Take evenly spaced samples to get a range of volatility levels
-        step = max(1, len(indices) // max_samples)
-        selected_indices = indices[::step][:max_samples]
-        
-        # Limit validation to reasonable size
-        max_val = min(2000, len(X_val_seq))
-        X_val_seq = X_val_seq[:max_val]
-        y_val_seq = y_val_seq[:max_val]
-        raw_val_seq = raw_val_seq[:max_val]  # Add this line to keep sizes aligned
-
-        # Also update training data to keep aligned
-        X_train_seq = X_train_seq[selected_indices]
-        y_train_seq = y_train_seq[selected_indices]
-        raw_train_seq = raw_train_seq[selected_indices]  # Add this line too
-        
-        print(f"Using dataset - Train: {len(X_train_seq)}, Val: {len(X_val_seq)}")
-        
-        # Create datasets
-        # Create datasets with raw price information
-        train_dataset = EnhancedStockDataset(X_train_seq, y_train_seq, raw_prices=raw_train_seq, y_direction=None, y_volatility=None)
-        val_dataset = EnhancedStockDataset(X_val_seq, y_val_seq, raw_prices=raw_val_seq, y_direction=None, y_volatility=None)
-         # Use TPU-optimized data loaders
-        train_loader = create_tpu_dataloader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = create_tpu_dataloader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-        
-        # Create model and move to TPU device
-        model = EnhancedFunnyMachine(
-            input_size=X_train_seq.shape[2],
-            hidden_size=16,
-            matrix_size=4,
-            dropout=0.3
-        )
-        model = model.to(device)
-        
-        print("Enhanced s_mLSTM Stock Prediction Model:")
-        print(model)
-        total_params = sum(p.numel() for p in model.parameters())
-        print(f"Total parameters: {total_params:,}")
-        
-        feature_names = list(features.columns)
-        print(f"Using {len(feature_names)} features: {feature_names}")
-        
-        # Train with TPU-optimized function
-        train_model(model, train_loader, val_loader, target_scaler, epochs=EPOCHS)
-        #break  # Just one fold for now
+        print("Model test forward pass successful!")
+        print(f"Results keys: {list(results.keys())}")
+        print(f"Regime shape: {regime.shape}")
+        print(f"Signals shape: {signals.shape}")
+    except Exception as e:
+        print(f"Error during model test: {e}")
+        return
+    
+    # Get a reference scaler for output conversion
+    target_scaler = stock_data_dict[first_ticker]['target_scaler']
+    
+    # Train the model
+    trained_model = train_universal_model(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        target_scaler=target_scaler,
+        epochs=EPOCHS
+    )
+    
+    print("Training complete!")
+    
+    # Save the model and ticker mapping
+    torch.save({
+        'model_state_dict': trained_model.state_dict(),
+        'ticker_to_idx': ticker_to_idx,
+        'idx_to_ticker': idx_to_ticker
+    }, 'universal_stock_model.pth')
+    
+    print("Model saved to universal_stock_model.pth")
 
 if __name__ == "__main__":
     main()
