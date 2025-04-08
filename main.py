@@ -178,6 +178,106 @@ def merge_datasets(daily_df, hourly_df):
     
     return merged
 
+def prepare_multi_stock_data(tickers, start_date='2010-01-01', end_date='2023-12-31', 
+                          seq_length=64, pred_steps=5, balance_directions=True):
+    """
+    Prepare data for multiple stocks for universal model training
+    
+    Args:
+        tickers: List of ticker symbols to include
+        start_date, end_date: Date range for data
+        seq_length: Length of input sequences
+        pred_steps: Number of prediction steps
+        balance_directions: Whether to balance up/down samples
+        
+    Returns:
+        Dictionary mapping tickers to processed data
+    """
+    print(f"Preparing data for {len(tickers)} stocks")
+    
+    # Get daily data for all tickers in parallel
+    print("Fetching daily data...")
+    ticker_data = {}
+    
+    for ticker in tickers:
+        try:
+            # Get daily data
+            daily_data = get_daily_data(ticker, start_date, end_date)
+            
+            # Get hourly data for recent period
+            hourly_start = pd.to_datetime(end_date) - pd.Timedelta(days=365)
+            hourly_start_str = hourly_start.strftime('%Y-%m-%d')
+            hourly_data = get_hourly_data(ticker, hourly_start_str, end_date)
+            
+            # Skip tickers with insufficient data
+            if daily_data.empty or hourly_data.empty:
+                print(f"Skipping {ticker}: insufficient data")
+                continue
+                
+            # Merge daily and hourly data
+            merged_data = merge_datasets(daily_data, hourly_data)
+            merged_data['Ticker'] = ticker
+            
+            # Add technical indicators and prepare features
+            processed_data = prepare_data(merged_data)
+            ticker_data[ticker] = processed_data
+            
+            print(f"Processed {ticker}: {len(processed_data)} data points")
+            
+        except Exception as e:
+            print(f"Error processing {ticker}: {e}")
+    
+    # Create sequences for each ticker
+    stock_data_dict = {}
+    
+    for ticker, df in ticker_data.items():
+        try:
+            # Extract features and target
+            features = df.drop(columns=['Close', 'Ticker'])
+            target = df['Close'].values.reshape(-1, 1)
+            
+            # Get some basic static features for each stock
+            # In a full implementation, you would add more static features
+            static_features = {
+                'avg_volume': df['Volume'].mean(),
+                'avg_volatility': df['Returns'].std() if 'Returns' in df.columns else 0.01,
+                # Add more static features as needed
+            }
+            
+            # Scale the data
+            feature_scaler = RobustScaler()
+            target_scaler = RobustScaler()
+            
+            X_scaled = feature_scaler.fit_transform(features)
+            y_scaled = target_scaler.fit_transform(target)
+            
+            # Create sequences
+            X_seq, y_seq, raw_seq = create_sequences(
+                X_scaled, y_scaled, raw_prices=target,
+                seq_length=seq_length, balance_directions=balance_directions
+            )
+            
+            # Skip tickers with too few sequences
+            if len(X_seq) < 100:
+                print(f"Skipping {ticker}: only {len(X_seq)} sequences")
+                continue
+                
+            # Store the data
+            stock_data_dict[ticker] = {
+                'X': torch.FloatTensor(X_seq),
+                'y_price': torch.FloatTensor(y_seq),
+                'raw_prices': torch.FloatTensor(raw_seq),
+                'static_features': static_features,
+                'feature_scaler': feature_scaler,
+                'target_scaler': target_scaler
+            }
+            
+            print(f"Created {len(X_seq)} sequences for {ticker}")
+            
+        except Exception as e:
+            print(f"Error creating sequences for {ticker}: {e}")
+    
+    return stock_data_dict
 def prepare_data(df):
     df = df.copy()
     print("Initial data size:", len(df))
@@ -274,59 +374,82 @@ def add_technical_indicators(df):
     return df
 
 
-class EnhancedStockDataset(Dataset):
-    """Dataset that provides price, direction, and volatility labels"""
-    def __init__(self, X, y_price, raw_prices=None, y_direction=None, y_volatility=None):
-        self.X = torch.FloatTensor(X)
-        self.y_price = torch.FloatTensor(y_price)
+class MultiStockDataset(Dataset):
+    """Dataset that handles multiple stocks with price, direction, and volatility labels"""
+    def __init__(self, stock_data_dict, seq_length=64, pred_steps=5):
+        """
+        Initialize the multi-stock dataset
         
-        # Create direction labels based on RAW price data (before scaling)
-        if y_direction is None and raw_prices is not None:
-            # Generate direction from raw prices, not scaled prices
-            y_direction = np.zeros_like(y_price)
+        Args:
+            stock_data_dict: Dict mapping ticker symbols to dict containing:
+                - 'X': feature tensor (n_samples, seq_len, n_features)
+                - 'y_price': price targets 
+                - 'y_direction': direction targets (optional)
+                - 'y_volatility': volatility targets (optional)
+                - 'raw_prices': unscaled original prices (optional)
+                - 'static_features': stock-specific attributes (optional)
+            seq_length: length of input sequences
+            pred_steps: number of prediction steps
+        """
+        self.stock_data = stock_data_dict
+        self.tickers = list(stock_data_dict.keys())
+        self.ticker_to_idx = {ticker: idx for idx, ticker in enumerate(self.tickers)}
+        
+        # Count total number of sequences
+        self.sequence_counts = {}
+        self.total_sequences = 0
+        self.ticker_indices = []
+        self.X_indices = []
+        
+        # Create unified indices for accessing data
+        for ticker, data in stock_data_dict.items():
+            n_sequences = len(data['X'])
+            self.sequence_counts[ticker] = n_sequences
+            self.total_sequences += n_sequences
             
-            # Handle flattened raw_prices (reshape if needed)
-            if raw_prices.ndim == 2 and raw_prices.shape[1] == y_price.shape[1]:
-                # Raw prices are already in correct shape
-                for i in range(len(raw_prices)):  # Remove the -1 here
-                    # Compare each price point to the first price in sequence
-                    for j in range(1, min(5, raw_prices.shape[1])):
-                        y_direction[i, j] = (raw_prices[i, j] > raw_prices[i, 0]) * 1.0
-            else:
-                # Handle reshape case - if raw_prices is flattened
-                try:
-                    # Reshape if needed
-                    reshaped_prices = raw_prices.reshape(len(raw_prices), -1)
-                    for i in range(len(reshaped_prices)-1):
-                        for j in range(1, min(5, reshaped_prices.shape[1])):
-                            y_direction[i, j] = (reshaped_prices[i, j] > reshaped_prices[i, 0]) * 1.0
-                except Exception as e:
-                    print(f"Error reshaping raw prices: {e}")
-                    # Fallback - use scaled prices
-                    for i in range(len(y_price)-1):
-                        for j in range(1, y_price.shape[1]):
-                            y_direction[i, j] = (y_price[i, j] > y_price[i, 0]) * 1.0
-            
-            self.y_direction = torch.FloatTensor(y_direction)
-        # Create volatility labels if not provided
-        if y_volatility is None and y_price is not None:
-            # Default volatility as absolute price changes
-            y_volatility = np.zeros_like(y_price)
-            if y_price.shape[1] > 1:
-                y_volatility[:, 1:] = np.abs(y_price[:, 1:] - y_price[:, :-1])
-            self.y_volatility = torch.FloatTensor(y_volatility)
-        else:
-            self.y_volatility = torch.FloatTensor(y_volatility) if y_volatility is not None else torch.zeros_like(self.y_price)
-            
+            # Store ticker and sequence indices for each sample
+            ticker_idx = self.ticker_to_idx[ticker]
+            for i in range(n_sequences):
+                self.ticker_indices.append(ticker_idx)
+                self.X_indices.append(i)
+        
+        # Convert to tensors for efficiency
+        self.ticker_indices = torch.tensor(self.ticker_indices, dtype=torch.long)
+        self.X_indices = torch.tensor(self.X_indices, dtype=torch.long)
+        
+        print(f"Created dataset with {self.total_sequences} sequences from {len(self.tickers)} stocks")
+    
     def __len__(self):
-        return len(self.X)
-        
+        return self.total_sequences
+    
     def __getitem__(self, idx):
-        return self.X[idx], {
-            'price': self.y_price[idx],
-            'direction': self.y_direction[idx],
-            'volatility': self.y_volatility[idx]
-        }
+        # Get ticker and sequence index for this sample
+        ticker_idx = self.ticker_indices[idx].item()
+        X_idx = self.X_indices[idx].item()
+        ticker = self.tickers[ticker_idx]
+        
+        # Get the data for this ticker
+        stock_data = self.stock_data[ticker]
+        
+        # Get the sequence and targets
+        X = stock_data['X'][X_idx]
+        
+        # Build target dict with available targets
+        targets = {}
+        if 'y_price' in stock_data:
+            targets['price'] = stock_data['y_price'][X_idx]
+        if 'y_direction' in stock_data:
+            targets['direction'] = stock_data['y_direction'][X_idx]
+        if 'y_volatility' in stock_data:
+            targets['volatility'] = stock_data['y_volatility'][X_idx]
+        
+        # Add static features if available
+        if 'static_features' in stock_data:
+            static_features = stock_data['static_features']
+            targets['static_features'] = static_features
+        
+        # Return the features, targets, and ticker index for embedding lookup
+        return X, targets, ticker_idx
 def create_tpu_dataloader(dataset, batch_size, shuffle=True):
     """Create a DataLoader optimized for TPU"""
     loader = DataLoader(
@@ -337,12 +460,51 @@ def create_tpu_dataloader(dataset, batch_size, shuffle=True):
         num_workers=0  # TPU works best with 0 workers
     )
     return loader
+def create_universal_dataloaders(train_data, val_data, batch_size=32):
+    """Create DataLoaders for universal model training"""
+    # Create datasets
+    train_dataset = MultiStockDataset(train_data)
+    val_dataset = MultiStockDataset(val_data)
+    
+    # Create DataLoaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=0,  # Adjust based on your system
+        drop_last=False
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=0,
+        drop_last=False
+    )
+    
+    return train_loader, val_loader
 # Enhanced FunnyMachine with directional prediction
-class EnhancedFunnyMachine(nn.Module):
-    def __init__(self, input_size, hidden_size=16, matrix_size=4, dropout=0.2):
+class UniversalStockModel(nn.Module):
+    def __init__(self, input_size, num_stocks, embedding_dim=32, hidden_size=16, 
+                 matrix_size=4, dropout=0.2, use_static_features=False):
         super().__init__()
+        
+        # Stock embedding layer
+        self.stock_embedding = nn.Embedding(num_stocks, embedding_dim)
+        
+        # Static feature processing (optional)
+        self.use_static_features = use_static_features
+        if use_static_features:
+            self.static_feature_layer = nn.Linear(5, embedding_dim)  # Adjust 5 based on static feature count
+        
+        # Size of combined input (original features + embedding)
+        # Each timestep in the sequence gets concatenated with the embedding
+        self.combined_input_size = input_size + embedding_dim
+        
+        # Main model
         self.extended_mlstm = ParallelExtendedSMLSTM(
-            input_size=input_size,
+            input_size=self.combined_input_size,  # Increased to include embedding
             hidden_size=hidden_size,
             matrix_size=matrix_size,
             num_layers=2,
@@ -351,28 +513,45 @@ class EnhancedFunnyMachine(nn.Module):
         )
         
         # Regime adaptation
-        self.regime_adapter = nn.Linear(4, 5)  # 4 regimes to 5 time steps
-
-    def forward(self, x):
-        results, regime, signals = self.extended_mlstm(x)
+        self.regime_adapter = nn.Linear(4, 5)
         
-        # Apply regime conditioning to price predictions
+        # Stock-specific output adaptation
+        self.stock_output_adapter = nn.Linear(embedding_dim, 5)
+
+    def forward(self, x, stock_idx, static_features=None):
+        batch_size, seq_len, feat_dim = x.size()
+        
+        # Get stock embeddings
+        stock_emb = self.stock_embedding(stock_idx)  # [batch_size, embedding_dim]
+        
+        # Expand embedding to match sequence length
+        # From [batch_size, embedding_dim] to [batch_size, seq_len, embedding_dim]
+        stock_emb_expanded = stock_emb.unsqueeze(1).expand(-1, seq_len, -1)
+        
+        # Combine input features with stock embedding
+        combined_input = torch.cat([x, stock_emb_expanded], dim=2)
+        
+        # Process through main model
+        results, regime, signals = self.extended_mlstm(combined_input)
+        
+        # Apply regime conditioning
         regime_adjustment = self.regime_adapter(regime) * 0.1
+        
+        # Apply stock-specific adjustment based on embedding
+        stock_adjustment = self.stock_output_adapter(stock_emb) * 0.05
         
         # Ensure results is a dictionary
         if not isinstance(results, dict):
-            # If results is a tensor, convert to expected dictionary format
             results = {
                 'price': results, 
                 'direction_logits': results,
                 'volatility': F.softplus(results)
             }
         elif 'direction' in results and 'direction_logits' not in results:
-            # Store logits separately for BCEWithLogitsLoss
             results['direction_logits'] = results['direction']
-            
-        # Now safely adjust price
-        results['price'] = results['price'] + regime_adjustment
+        
+        # Apply adjustments to price
+        results['price'] = results['price'] + regime_adjustment + stock_adjustment
         
         return results, regime, signals
 
@@ -426,6 +605,76 @@ def create_sequences(scaled_data, target_scaled, raw_prices=None, seq_length=64,
     else:
         return np.array(X), np.array(y)
 
+def create_multi_stock_train_val_split(stock_data_dict, val_ratio=0.15, time_based=True):
+    """
+    Create train/validation split for multi-stock data
+    
+    Args:
+        stock_data_dict: Dict of stock data as returned by prepare_multi_stock_data
+        val_ratio: Ratio of data to use for validation (0.0-1.0)
+        time_based: If True, use the most recent data for validation
+                    If False, randomly sample from each stock
+    
+    Returns:
+        train_data_dict, val_data_dict: Dictionaries for training and validation
+    """
+    train_data = {}
+    val_data = {}
+    
+    for ticker, data in stock_data_dict.items():
+        n_sequences = len(data['X'])
+        val_size = int(n_sequences * val_ratio)
+        
+        if time_based:
+            # Time-based split (most recent data for validation)
+            train_idx = slice(0, n_sequences - val_size)
+            val_idx = slice(n_sequences - val_size, None)
+        else:
+            # Random split
+            indices = torch.randperm(n_sequences)
+            train_idx = indices[val_size:]
+            val_idx = indices[:val_size]
+        
+        # Create train data for this ticker
+        train_data[ticker] = {
+            'X': data['X'][train_idx],
+            'y_price': data['y_price'][train_idx],
+            'raw_prices': data['raw_prices'][train_idx],
+            'static_features': data['static_features'],
+            'feature_scaler': data['feature_scaler'],
+            'target_scaler': data['target_scaler']
+        }
+        
+        # Create validation data for this ticker
+        val_data[ticker] = {
+            'X': data['X'][val_idx],
+            'y_price': data['y_price'][val_idx],
+            'raw_prices': data['raw_prices'][val_idx],
+            'static_features': data['static_features'],
+            'feature_scaler': data['feature_scaler'],
+            'target_scaler': data['target_scaler']
+        }
+        
+        # Now generate direction and volatility labels for both sets
+        for dataset in [train_data[ticker], val_data[ticker]]:
+            # Create direction labels based on raw prices
+            y_direction = torch.zeros_like(dataset['y_price'])
+            raw_prices = dataset['raw_prices']
+            
+            for i in range(len(raw_prices)):
+                for j in range(1, min(5, raw_prices.shape[1])):
+                    y_direction[i, j] = (raw_prices[i, j] > raw_prices[i, 0]).float()
+            
+            # Create volatility labels as absolute price changes
+            y_volatility = torch.zeros_like(dataset['y_price'])
+            if dataset['y_price'].shape[1] > 1:
+                y_volatility[:, 1:] = torch.abs(dataset['y_price'][:, 1:] - dataset['y_price'][:, :-1])
+            
+            # Store the labels
+            dataset['y_direction'] = y_direction
+            dataset['y_volatility'] = y_volatility
+    
+    return train_data, val_data
 def get_cluster_data(tickers, start_date='2010-01-01', end_date='2023-12-31', max_workers=3):
     """
     Fetch and prepare data for a cluster of stocks.
