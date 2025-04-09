@@ -13,7 +13,8 @@ from requests.exceptions import RequestException
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
-
+import yfinance as yf  # For stock data download
+from lstm import ParallelExtendedSMLSTM  # For the LSTM model implementation
 # Add TPU-specific imports
 import torch_xla
 import torch_xla.core.xla_model as xm
@@ -36,7 +37,7 @@ def safe_fetch(ticker, start, end, retries=15, delay=10):
     """
     for attempt in range(retries):
         try:
-            data = download(
+            data = yf.download(
                 ticker,
                 start=start.strftime("%Y-%m-%d"), 
                 end=end.strftime("%Y-%m-%d"),
